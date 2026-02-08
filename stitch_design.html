@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Generative Art Studio - Native Workspace Dark</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#FFD700","primary-hover": "#FFEA00",
+                        "primary-active": "#E6C200",
+                        "background-dark": "#050505","sidebar-bg": "#121212","sidebar-border": "#262626",
+                        "panel-bg": "#1A1A1A",
+                        "control-bg": "#2A2A2A",
+                        "text-primary": "#FFFFFF",
+                        "text-secondary": "#A3A3A3",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"],
+                        "body": ["Inter", "sans-serif"],
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.375rem",
+                        "lg": "0.5rem", 
+                        "xl": "0.75rem",
+                    },
+                    boxShadow: {
+                        "inset-soft": "inset 0 2px 4px 0 rgba(0, 0, 0, 0.5)",
+                        "app-window": "0 25px 50px -12px rgba(0, 0, 0, 0.8)",
+                        "glow": "0 0 10px rgba(255, 215, 0, 0.3)",
+                    }
+                },
+            },
+        }
+    </script>
+<style>::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f0f0f;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #333;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #444;
+        }input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { 
+            -webkit-appearance: none; 
+            margin: 0; 
+        }input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px;
+            width: 16px;
+            border-radius: 50%;
+            background: #FFD700;
+            border: 2px solid #1a1a1a;
+            box-shadow: 0 0 5px rgba(255, 215, 0, 0.5);
+            cursor: pointer;
+            margin-top: -6px;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: #333;
+            border-radius: 2px;
+        }
+        input[type=range]:focus::-webkit-slider-runnable-track {
+            background: #444;
+        }
+    </style>
+</head>
+<body class="bg-[#0a0a0a] h-screen w-screen overflow-hidden flex items-center justify-center font-display text-text-primary antialiased selection:bg-primary selection:text-black">
+<div class="relative w-full h-full max-w-[1600px] max-h-[1000px] bg-background-dark shadow-app-window flex flex-col md:rounded-xl overflow-hidden border border-[#333]">
+<header class="h-10 bg-[#141414] border-b border-sidebar-border flex items-center justify-between px-4 select-none drag-region">
+<div class="flex items-center gap-2 w-1/3">
+<div class="flex gap-1.5 group">
+<div class="w-3 h-3 rounded-full bg-[#FF5F57] flex items-center justify-center"></div>
+<div class="w-3 h-3 rounded-full bg-[#FEBC2E] flex items-center justify-center"></div>
+<div class="w-3 h-3 rounded-full bg-[#28C840] flex items-center justify-center"></div>
+</div>
+</div>
+<div class="w-1/3 text-center flex items-center justify-center gap-2 opacity-90">
+<span class="material-symbols-outlined text-sm text-primary">filter_drama</span>
+<span class="text-xs font-semibold text-gray-300">Generative Studio — Untitled Project</span>
+</div>
+<div class="w-1/3 flex justify-end items-center gap-3">
+<div class="flex items-center gap-1.5 text-xs text-gray-400 bg-[#222] px-2 py-0.5 rounded border border-[#333]">
+<span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shadow-glow"></span>
+                    GPU Active
+                </div>
+</div>
+</header>
+<div class="flex flex-1 overflow-hidden">
+<aside class="w-80 bg-sidebar-bg border-r border-sidebar-border flex flex-col z-10 shrink-0">
+<div class="px-4 py-3 border-b border-sidebar-border bg-sidebar-bg">
+<div class="flex bg-[#222] p-1 rounded-lg border border-[#333]">
+<button class="flex-1 text-xs font-medium py-1 px-3 rounded shadow-sm bg-primary text-black transition-all">Create</button>
+<button class="flex-1 text-xs font-medium py-1 px-3 rounded text-gray-400 hover:text-white transition-all">Animate</button>
+<button class="flex-1 text-xs font-medium py-1 px-3 rounded text-gray-400 hover:text-white transition-all">Render</button>
+</div>
+</div>
+<div class="flex-1 overflow-y-auto p-4 space-y-6">
+<div class="space-y-3">
+<div class="flex items-center justify-between group cursor-pointer">
+<h3 class="text-[11px] uppercase tracking-wider font-bold text-primary">Geometry</h3>
+<span class="material-symbols-outlined text-sm text-gray-500 group-hover:text-white transition-colors">expand_less</span>
+</div>
+<div class="space-y-1.5">
+<label class="text-xs font-medium text-gray-400">Primitive Type</label>
+<div class="relative">
+<select class="w-full bg-[#1A1A1A] border border-[#333] text-gray-200 text-xs rounded-md py-2 pl-3 pr-8 focus:ring-1 focus:ring-primary focus:border-primary shadow-sm appearance-none outline-none">
+<option>Ico Sphere</option>
+<option>Cube Grid</option>
+<option>Torus Knot</option>
+<option>Point Cloud</option>
+</select>
+<span class="material-symbols-outlined absolute right-2 top-2 text-gray-500 pointer-events-none text-sm">unfold_more</span>
+</div>
+</div>
+<div class="space-y-2">
+<div class="flex justify-between items-center">
+<label class="text-xs font-medium text-gray-400">Subdivisions</label>
+<input class="w-12 text-right text-xs bg-[#1A1A1A] text-white border border-[#333] rounded py-0.5 px-1 focus:ring-1 focus:ring-primary focus:border-primary outline-none" type="number" value="4"/>
+</div>
+<input class="accent-primary" max="10" min="1" type="range" value="4"/>
+</div>
+<div class="flex items-center justify-between py-1">
+<span class="text-xs font-medium text-gray-400">Wireframe Mode</span>
+<button class="w-9 h-5 rounded-full bg-[#333] relative transition-colors focus:outline-none hover:bg-[#444] border border-[#444]">
+<span class="absolute left-1 top-1 w-3 h-3 bg-gray-500 rounded-full shadow-sm transition-transform"></span>
+</button>
+</div>
+</div>
+<div class="h-px bg-[#262626] w-full"></div>
+<div class="space-y-3">
+<div class="flex items-center justify-between group cursor-pointer">
+<h3 class="text-[11px] uppercase tracking-wider font-bold text-primary">Fluid Simulation</h3>
+<span class="material-symbols-outlined text-sm text-gray-500 group-hover:text-white transition-colors">expand_less</span>
+</div>
+<div class="grid grid-cols-2 gap-3">
+<div class="space-y-1.5">
+<label class="text-xs font-medium text-gray-400">Viscosity</label>
+<div class="flex items-center bg-[#1A1A1A] border border-[#333] rounded-md overflow-hidden shadow-sm focus-within:ring-1 focus-within:ring-primary focus-within:border-primary">
+<span class="material-symbols-outlined text-sm text-gray-500 pl-1.5">water_drop</span>
+<input class="w-full bg-transparent text-xs border-0 py-1.5 px-1.5 text-gray-200 focus:ring-0 placeholder-gray-600" step="0.05" type="number" value="0.85"/>
+</div>
+</div>
+<div class="space-y-1.5">
+<label class="text-xs font-medium text-gray-400">Dissipation</label>
+<div class="flex items-center bg-[#1A1A1A] border border-[#333] rounded-md overflow-hidden shadow-sm focus-within:ring-1 focus-within:ring-primary focus-within:border-primary">
+<span class="material-symbols-outlined text-sm text-gray-500 pl-1.5">blur_on</span>
+<input class="w-full bg-transparent text-xs border-0 py-1.5 px-1.5 text-gray-200 focus:ring-0 placeholder-gray-600" step="0.01" type="number" value="0.96"/>
+</div>
+</div>
+</div>
+<div class="space-y-2">
+<div class="flex justify-between items-center">
+<label class="text-xs font-medium text-gray-400">Vorticity</label>
+<span class="text-[10px] text-primary font-mono tracking-wider">HIGH</span>
+</div>
+<input class="accent-primary w-full" max="100" min="0" type="range" value="75"/>
+</div>
+</div>
+<div class="h-px bg-[#262626] w-full"></div>
+<div class="space-y-3">
+<div class="flex items-center justify-between group cursor-pointer">
+<h3 class="text-[11px] uppercase tracking-wider font-bold text-primary">Appearance</h3>
+<span class="material-symbols-outlined text-sm text-gray-500 group-hover:text-white transition-colors">expand_less</span>
+</div>
+<div class="flex items-center justify-between bg-[#1A1A1A] p-2 rounded-lg border border-[#333] shadow-sm hover:border-gray-600 transition-colors cursor-pointer">
+<div class="flex items-center gap-2">
+<div class="w-6 h-6 rounded-full bg-gradient-to-br from-yellow-500 via-orange-500 to-red-500 border border-white/10 shadow-sm"></div>
+<span class="text-xs font-medium text-gray-200">Solar Flare</span>
+</div>
+<button class="text-gray-500 hover:text-white">
+<span class="material-symbols-outlined text-base">edit</span>
+</button>
+</div>
+<div class="flex gap-2">
+<button class="flex-1 flex items-center justify-center gap-1 py-2 px-2 bg-[#222] border border-[#333] rounded shadow-sm text-xs font-medium text-gray-400 hover:bg-[#333] hover:text-white hover:border-gray-600 transition-all">
+<span class="material-symbols-outlined text-sm">palette</span> Custom
+                            </button>
+<button class="flex-1 flex items-center justify-center gap-1 py-2 px-2 bg-[#222] border border-[#333] rounded shadow-sm text-xs font-medium text-gray-400 hover:bg-[#333] hover:text-white hover:border-gray-600 transition-all">
+<span class="material-symbols-outlined text-sm">shuffle</span> Random
+                            </button>
+</div>
+</div>
+</div>
+<div class="p-4 bg-[#0f0f0f] border-t border-sidebar-border">
+<button class="w-full bg-primary hover:bg-primary-hover active:bg-primary-active text-black text-sm font-bold py-2.5 px-4 rounded-lg shadow-glow flex items-center justify-center gap-2 transition-all">
+<span class="material-symbols-outlined text-lg">play_circle</span>
+                        Generate Preview
+                    </button>
+<div class="flex justify-between items-center mt-3 text-[10px] text-gray-500 font-medium font-mono">
+<span>v2.4.1 (Beta)</span>
+<span class="flex items-center gap-1"><span class="w-1.5 h-1.5 bg-green-500 rounded-full shadow-[0_0_5px_rgba(34,197,94,0.5)]"></span> Saved</span>
+</div>
+</div>
+</aside>
+<main class="flex-1 bg-[#050505] relative flex flex-col min-w-0">
+<div class="absolute top-4 right-4 z-20 flex flex-col gap-2">
+<div class="bg-[#1A1A1A]/90 backdrop-blur-sm border border-[#333] p-1 rounded-lg shadow-xl flex flex-col gap-1">
+<button class="p-1.5 rounded hover:bg-[#333] text-gray-400 hover:text-white transition-colors tooltip-trigger" title="Reset View">
+<span class="material-symbols-outlined text-lg">restart_alt</span>
+</button>
+<button class="p-1.5 rounded hover:bg-[#333] text-gray-400 hover:text-white transition-colors" title="Toggle Grid">
+<span class="material-symbols-outlined text-lg">grid_4x4</span>
+</button>
+<button class="p-1.5 rounded hover:bg-[#333] text-gray-400 hover:text-white transition-colors" title="Fullscreen">
+<span class="material-symbols-outlined text-lg">fullscreen</span>
+</button>
+<div class="h-px bg-[#333] mx-1"></div>
+<button class="p-1.5 rounded hover:bg-[#333] text-gray-400 hover:text-white transition-colors" title="Export Image">
+<span class="material-symbols-outlined text-lg">image</span>
+</button>
+</div>
+</div>
+<div class="flex-1 m-4 rounded-lg overflow-hidden relative bg-black shadow-inset-soft border border-[#222] group/canvas">
+<div class="absolute inset-0 w-full h-full bg-black">
+<div class="absolute inset-0 bg-gradient-to-br from-black via-[#111] to-black opacity-100"></div>
+<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[80%] h-[80%] rounded-full bg-gradient-to-r from-yellow-600 via-orange-600 to-red-900 blur-[100px] opacity-30 mix-blend-screen animate-pulse"></div>
+<div class="absolute inset-0 opacity-20" style="background-image: radial-gradient(#333 1px, transparent 1px); background-size: 40px 40px;"></div>
+<img class="absolute inset-0 w-full h-full object-cover mix-blend-screen opacity-90 grayscale brightness-125 contrast-125 sepia-[.3] hue-rotate-15" data-alt="Abstract fluid motion art with swirling colors of oil on water in dark mode" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBlE7gctAYV9oh6BSdB97u1hy7oqmSYDwBJVoIPkKFFViosldNnbISfp7I8kobG9bkvNQj-1m8M4XrLIob7D7n3gLW5vJ-qYCreuM84Ua5lq2zNgG4NuiyPe-s6dr9A--4BJKsd9qnb7uMUp9j__ilLnSvRNZKfAzISVdLVtTBLJGD1bc6m7aQfuo6IJ86WEXfV4TQ80inHtXisVDky2M8zEUivgGfh9qhWrTBRn5KLZpo33PwgSFcbBeUDxjJx1ul9ZUmpbsbQREo"/>
+<div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+<div class="w-[400px] h-[400px] border border-primary/20 rounded-full animate-spin-slow" style="animation-duration: 20s;"></div>
+<div class="w-[200px] h-[200px] border border-primary/40 rounded-full absolute border-dashed"></div>
+<div class="w-2 h-2 bg-primary rounded-full absolute shadow-[0_0_15px_#FFD700]"></div>
+</div>
+</div>
+<div class="absolute top-3 left-3 bg-black/60 backdrop-blur text-primary/90 px-2 py-1 rounded text-[10px] font-mono border border-primary/20 pointer-events-none tracking-tight">
+                        FPS: 60 | RES: 1920x1080 | SEED: 843920
+                    </div>
+<div class="absolute bottom-6 left-1/2 -translate-x-1/2 bg-[#1A1A1A]/90 backdrop-blur-md border border-[#333] shadow-2xl rounded-full px-5 py-2.5 flex items-center gap-4 transition-all duration-300 opacity-0 group-hover/canvas:opacity-100 translate-y-2 group-hover/canvas:translate-y-0">
+<button class="text-gray-400 hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-xl">skip_previous</span>
+</button>
+<button class="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-black shadow-[0_0_15px_rgba(255,215,0,0.4)] hover:scale-105 transition-transform active:scale-95 hover:bg-primary-hover">
+<span class="material-symbols-outlined text-3xl fill-current">play_arrow</span>
+</button>
+<button class="text-gray-400 hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-xl">skip_next</span>
+</button>
+<div class="w-px h-6 bg-[#333] mx-1"></div>
+<div class="flex flex-col w-32 gap-1">
+<div class="flex justify-between text-[9px] font-bold text-gray-400 uppercase font-mono">
+<span>Time</span>
+<span class="text-white">00:12</span>
+</div>
+<div class="h-1 bg-[#333] rounded-full overflow-hidden">
+<div class="h-full bg-primary w-1/3 rounded-full shadow-[0_0_5px_rgba(255,215,0,0.5)]"></div>
+</div>
+</div>
+</div>
+</div>
+<div class="h-8 bg-[#111] border-t border-sidebar-border flex items-center justify-between px-4 text-xs text-gray-500 select-none">
+<div class="flex items-center gap-4">
+<span class="flex items-center gap-1.5 hover:text-primary cursor-pointer transition-colors group">
+<span class="material-symbols-outlined text-sm group-hover:text-primary">terminal</span> Console
+                        </span>
+<span class="flex items-center gap-1.5 hover:text-primary cursor-pointer transition-colors group">
+<span class="material-symbols-outlined text-sm group-hover:text-primary">history</span> History
+                        </span>
+</div>
+<div class="flex items-center gap-4 font-mono text-[10px] tracking-wide">
+<div class="flex items-center gap-2">
+<span class="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse"></span>
+<span>RENDERING PAUSED</span>
+</div>
+<div class="h-3 w-px bg-[#333]"></div>
+<span>ZOOM: 100%</span>
+</div>
+</div>
+</main>
+</div>
+</div>
+
+</body></html>

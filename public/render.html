@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Shader Renderer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: #000;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="canvas"></canvas>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Default vertex shader
+        const vertexShader = `
+            varying vec2 vUv;
+            void main() {
+                vUv = uv;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+        `;
+
+
+
+        let renderer, scene, camera, material, mesh;
+        let startTime = performance.now();
+        let currentTime = 0;
+
+        function init(width, height, fragmentCode) {
+            const canvas = document.getElementById('canvas');
+            canvas.width = width;
+            canvas.height = height;
+
+            try {
+                renderer = new THREE.WebGLRenderer({
+                    canvas,
+                    antialias: true,
+                    preserveDrawingBuffer: true,
+                    failIfMajorPerformanceCaveat: false
+                });
+                renderer.setSize(width, height);
+            } catch (e) {
+                console.error('Error creating WebGLRenderer:', e);
+                // Create a dummy context or throw to stop execution depending on needs, 
+                // but logging is critical for the server to pick up.
+                throw new Error('Failed to initialize WebGLRenderer: ' + e.message);
+            }
+
+            scene = new THREE.Scene();
+            camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 10);
+            camera.position.z = 1;
+
+            // Build full fragment shader
+            // Use the fragment code directly (it already contains helpers where needed)
+            // But we need to ensure uniforms are defined if not present in the code,
+            // OR simpler: The backend should receive the FULL shader code.
+            // Assuming the client sends the full code including uniforms if generated?
+            // Let's assume the strict structure:
+
+            // We'll prepend the standard header if it's missing, but NOT the helpers.
+            // We'll prepend the precision header.
+            // Uniforms and varyings are already included by the generator (gemini.ts)
+            const fullFragmentShader = `
+                precision highp float;
+                ${fragmentCode}
+            `;
+
+            material = new THREE.ShaderMaterial({
+                vertexShader,
+                fragmentShader: fullFragmentShader,
+                uniforms: {
+                    uTime: { value: 0 },
+                    uResolution: { value: new THREE.Vector2(width, height) }
+                }
+            });
+
+            const geometry = new THREE.PlaneGeometry(2, 2);
+            mesh = new THREE.Mesh(geometry, material);
+            scene.add(mesh);
+            if (this.mesh) {
+                this.mesh.material = this.material;
+            }
+
+            // Force initial render to compile shader and check errors
+            render();
+
+            console.log('Shader initialized successfully');
+            window.isShaderReady = true; // Signal to Puppeteer
+        }
+
+        function setTime(time) {
+            currentTime = time;
+            if (material) {
+                material.uniforms.uTime.value = time;
+            }
+        }
+
+        function render() {
+            if (renderer && scene && camera) {
+                renderer.render(scene, camera);
+                // console.log('Rendered frame'); // Too noisy for every frame
+            } else {
+                console.error('Render skipped: Missing components', {
+                    renderer: !!renderer,
+                    scene: !!scene,
+                    camera: !!camera
+                });
+            }
+        }
+
+        // Expose functions for Puppeteer
+        window.initShader = init;
+        window.setTime = setTime;
+        window.render = render;
+        window.rendererInstance = renderer; // Expose instance as rendererInstance to avoid conflict with function render? No render is function.
+        // Actually variable name 'renderer' in closure vs 'render' function.
+
+        // Let's use a getter to be safe as renderer is initialized later
+        Object.defineProperty(window, 'graphicsRenderer', {
+            get: function () { return renderer; }
+        });
+
+        // Expose state for debugging
+        window.getDebugState = () => ({
+            renderer: !!renderer,
+            scene: !!scene,
+            camera: !!camera,
+            material: !!material,
+            width: window.innerWidth,
+            height: window.innerHeight
+        });
+    </script>
+</body>
+
+</html>
