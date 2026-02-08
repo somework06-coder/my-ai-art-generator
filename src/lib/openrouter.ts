@@ -549,7 +549,7 @@ function cleanCode(code: string): string {
     // Fix 'specularIntensity' or similar dot-product results assigned to vec3 (should be float)
     // Pattern: vec3 var = pow(max(dot(...)...)...); -> float var = ...
     // Case 1: vec3 specularIntensity = pow... (Direct match)
-    code = code.replace(/vec3\s+(specularIntensity|specular|highlight)\s*=\s*(?:pow|max|dot)/g, 'float $1 = $2');
+    code = code.replace(/vec3\s+(specularIntensity|specular|highlight)\s*=\s*(pow|max|dot)/g, 'float $1 = $2');
 
     // Case 2: General vec3 = pow(max(dot...  (Already covered but reinforcing)
     code = code.replace(/vec3\s+(\w+)\s*=\s*pow\s*\(\s*max\s*\(\s*dot/g, 'float $1 = pow(max(dot');
