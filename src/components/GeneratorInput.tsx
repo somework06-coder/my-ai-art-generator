@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -41,22 +42,65 @@ export default function GeneratorInput({ onGenerate, isLoading }: GeneratorInput
 
     return (
         <div className="generator-input">
-            {/* Mode Toggle */}
-            <div className="mode-toggle">
-                <button
-                    className={`mode-btn ${mode === 'prompt' ? 'active' : ''}`}
-                    onClick={() => setMode('prompt')}
-                    disabled={isLoading}
-                >
-                    <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>auto_awesome</span> AI Prompt
-                </button>
-                <button
-                    className={`mode-btn ${mode === 'random' ? 'active' : ''}`}
-                    onClick={() => setMode('random')}
-                    disabled={isLoading}
-                >
-                    <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>shuffle</span> Random Art
-                </button>
+            {/* Header / Mode Switcher */}
+            <div style={{ marginBottom: '20px' }}>
+                <div style={{
+                    display: 'flex',
+                    background: 'rgba(0,0,0,0.4)',
+                    padding: '4px',
+                    borderRadius: '10px',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    width: '100%',
+                }}>
+                    <button
+                        style={{
+                            flex: 1,
+                            padding: '8px 12px',
+                            borderRadius: '8px',
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            border: 'none',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px',
+                            transition: 'all 0.2s',
+                            background: mode === 'prompt' ? 'var(--accent)' : 'transparent',
+                            color: mode === 'prompt' ? '#000' : '#999',
+                            boxShadow: mode === 'prompt' ? '0 2px 8px rgba(225,178,69,0.3)' : 'none',
+                        }}
+                        onClick={() => setMode('prompt')}
+                        disabled={isLoading}
+                    >
+                        <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>auto_awesome</span>
+                        AI Prompt
+                    </button>
+                    <button
+                        style={{
+                            flex: 1,
+                            padding: '8px 12px',
+                            borderRadius: '8px',
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            border: 'none',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px',
+                            transition: 'all 0.2s',
+                            background: mode === 'random' ? 'var(--accent)' : 'transparent',
+                            color: mode === 'random' ? '#000' : '#999',
+                            boxShadow: mode === 'random' ? '0 2px 8px rgba(225,178,69,0.3)' : 'none',
+                        }}
+                        onClick={() => setMode('random')}
+                        disabled={isLoading}
+                    >
+                        <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>shuffle</span>
+                        Random
+                    </button>
+                </div>
             </div>
 
             <form onSubmit={handleSubmit}>
@@ -90,7 +134,7 @@ export default function GeneratorInput({ onGenerate, isLoading }: GeneratorInput
                             placeholder="e.g. Cosmic nebula with swirling galaxies and twinkling stars..."
                             className="prompt-input"
                             disabled={isLoading}
-                            rows={3}
+                            rows={4}
                         />
                     </div>
                 )}

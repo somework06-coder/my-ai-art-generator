@@ -1,3 +1,4 @@
+
 const express = require('express');
 const puppeteer = require('puppeteer');
 const ffmpeg = require('fluent-ffmpeg');
@@ -6,6 +7,9 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const cors = require('cors');
+const { Worker } = require('bullmq');
+const { createClient } = require('@supabase/supabase-js');
+const Redis = require('ioredis');
 
 // Set FFmpeg path
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
@@ -15,6 +19,28 @@ const PORT = process.env.PORT || 8080;
 
 app.use(cors()); // Allow cross-origin requests
 app.use(express.json({ limit: '50mb' }));
+
+// Supabase Setup
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+let supabase = null;
+
+if (supabaseUrl && supabaseKey) {
+    supabase = createClient(supabaseUrl, supabaseKey);
+} else {
+    console.warn("⚠️ SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY missing. Uploads will fail.");
+}
+
+// Redis Setup
+const redisUrl = process.env.REDIS_URL;
+let connection = null;
+
+if (redisUrl) {
+    connection = new Redis(redisUrl, { maxRetriesPerRequest: null });
+    console.log(`✅ Connected to Redis at ${redisUrl}`);
+} else {
+    console.warn("⚠️ REDIS_URL missing. Worker will not start.");
+}
 
 function getResolution(aspectRatio, quality) {
     let baseWidth, baseHeight;
@@ -63,22 +89,20 @@ const RENDER_HTML = `
 </body>
 </html>`;
 
-app.get('/', (req, res) => res.send('Video Service OK'));
-
-app.post('/export', async (req, res) => {
+async function processVideoExport(jobId, data) {
     let browser = null;
     let tempDir = '';
 
     try {
-        const { shaderCode, aspectRatio = '16:9', quality = 'HD', duration = 5, fps = 30, format = 'mp4' } = req.body;
+        const { shaderCode, aspectRatio = '16:9', quality = 'HD', duration = 5, fps = 30, format = 'mp4' } = data;
 
-        if (!shaderCode) return res.status(400).json({ error: 'No shader code' });
+        if (!shaderCode) throw new Error('No shader code provided');
 
         const { width, height } = getResolution(aspectRatio, quality);
         const totalFrames = Math.floor(duration * fps);
-        console.log(`Exporting: ${width}x${height}, ${totalFrames} frames`);
+        console.log(`[Job ${jobId}] Starting Export: ${width}x${height}, ${totalFrames} frames`);
 
-        tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'render-'));
+        tempDir = fs.mkdtempSync(path.join(os.tmpdir(), `render-${jobId}-`));
         const framesDir = path.join(tempDir, 'frames');
         fs.mkdirSync(framesDir);
 
@@ -89,15 +113,10 @@ app.post('/export', async (req, res) => {
 
         const page = await browser.newPage();
         await page.setViewport({ width, height });
-
-        // Load HTML via Data URI
         await page.setContent(RENDER_HTML);
-
-        // Init
         await page.evaluate((code, w, h) => window.initShader(w, h, code), shaderCode, width, height);
         await page.waitForFunction('window.isReady === true');
 
-        // Capture
         for (let i = 0; i < totalFrames; i++) {
             await page.evaluate((t) => window.renderFrame(t), i / fps);
             await page.screenshot({ path: path.join(framesDir, `frame_${String(i).padStart(5, '0')}.jpg`), type: 'jpeg', quality: 90 });
@@ -106,11 +125,7 @@ app.post('/export', async (req, res) => {
         await browser.close();
         browser = null;
 
-        // Encode
-        // Standardize output to H.264 for both MP4 and MOV to ensure consistent file size.
-        // Use CRF 14 for 4K (High Quality), 16 for FHD, 18 for HD.
         const output = path.join(tempDir, `output.${format}`);
-
         let crf = 18;
         if (quality === '4K') crf = 14;
         if (quality === 'FHD') crf = 16;
@@ -127,16 +142,120 @@ app.post('/export', async (req, res) => {
                 .run();
         });
 
-        res.download(output, `video.${format}`, () => {
-            fs.rmSync(tempDir, { recursive: true, force: true });
-        });
+        console.log(`[Job ${jobId}] Video encoded successfully.`);
+
+        // If Supabase is configured, upload the result
+        let videoUrl = null;
+        if (supabase) {
+            const fileBuffer = fs.readFileSync(output);
+            const fileName = `exports/${jobId}.${format}`;
+
+            console.log(`[Job ${jobId}] Uploading to Supabase Storage...`);
+            const { data: uploadData, error: uploadError } = await supabase.storage
+                .from('exports') // Ensure this bucket exists!
+                .upload(fileName, fileBuffer, {
+                    contentType: `video/${format}`,
+                    upsert: true
+                });
+
+            if (uploadError) throw uploadError;
+
+            // Get Public URL
+            const { data: { publicUrl } } = supabase.storage
+                .from('exports')
+                .getPublicUrl(fileName);
+
+            videoUrl = publicUrl;
+            console.log(`[Job ${jobId}] Uploaded: ${videoUrl}`);
+        }
+
+        // Clean up
+        fs.rmSync(tempDir, { recursive: true, force: true });
+
+        return { success: true, videoUrl };
 
     } catch (err) {
-        console.error(err);
+        console.error(`[Job ${jobId}] Failed:`, err);
         if (browser) browser.close();
         if (tempDir) fs.rmSync(tempDir, { recursive: true, force: true });
-        res.status(500).json({ error: 'Export failed' });
+        throw err;
+    }
+}
+
+
+// --- HTTP Server (Legacy / Health Check) ---
+app.get('/', (req, res) => res.send('Video Service Worker Running.'));
+
+app.get('/health', async (req, res) => {
+    const redisStatus = connection && connection.status === 'ready' ? 'connected' : 'disconnected';
+    res.json({ status: 'ok', redis: redisStatus });
+});
+
+// Allow direct HTTP export (optional, useful for testing without queue)
+app.post('/export', async (req, res) => {
+    try {
+        const result = await processVideoExport('http-' + Date.now(), req.body);
+        // Direct download not supported via this route anymore if uploading to S3, but for compatibility:
+        // We can't stream the file if we deleted it.
+        // So for HTTP legacy support, we might need adjustments.
+        // For simplicity, let's keep the logic simple: direct export uploads to storage if configured, OR errors out.
+        if (result.videoUrl) {
+            res.json({ url: result.videoUrl });
+        } else {
+            res.status(500).json({ error: 'Supabase storage not configured, cannot return URL via HTTP.' });
+        }
+    } catch (err) {
+        res.status(500).json({ error: err.message });
     }
 });
 
-app.listen(PORT, () => console.log(`Service running on ${PORT}`));
+app.listen(PORT, () => console.log(`HTTP Service running on ${PORT}`));
+
+
+// --- BullMQ Worker ---
+if (connection) {
+    const worker = new Worker('video-export', async (job) => {
+        console.log(`[Queue] Processing job ${job.id}...`);
+
+        // 1. Update Job Status to Processing (Optional, if we want granular UI updates via Supabase)
+        if (supabase && job.data.jobDbId) {
+            await supabase.from('export_jobs')
+                .update({ status: 'processing' })
+                .eq('id', job.data.jobDbId);
+        }
+
+        // 2. Process Video
+        const result = await processVideoExport(job.id, job.data);
+
+        // 3. Update Job Status to Completed
+        if (supabase && job.data.jobDbId) {
+            await supabase.from('export_jobs')
+                .update({
+                    status: 'completed',
+                    video_url: result.videoUrl
+                })
+                .eq('id', job.data.jobDbId);
+        }
+
+        return result;
+
+    }, { connection });
+
+    worker.on('completed', (job) => {
+        console.log(`[Queue] Job ${job.id} completed!`);
+    });
+
+    worker.on('failed', async (job, err) => {
+        console.error(`[Queue] Job ${job.id} failed: ${err.message}`);
+        if (supabase && job.data.jobDbId) {
+            await supabase.from('export_jobs')
+                .update({
+                    status: 'failed',
+                    error_msg: err.message
+                })
+                .eq('id', job.data.jobDbId);
+        }
+    });
+
+    console.log("👷 Queue Worker Started!");
+}

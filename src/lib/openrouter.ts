@@ -1,9 +1,9 @@
-// OpenRouter AI Client for Dynamic Shader Generation
-// Using native fetch to avoid adding heavy dependencies like OpenAI SDK
+// Google Gemini AI Client for Dynamic Shader Generation
+// Using native fetch to call Gemini REST API directly
 
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
-const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
-const MODEL_ID = 'google/gemini-2.0-flash-001'; // Switched to Gemini 2.0 Flash
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
+const GEMINI_MODEL = 'gemini-2.0-flash';
+const GEMINI_BASE_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 // Common GLSL helper functions that AI might use (reused from gemini.ts for consistency)
 const GLSL_HELPER_FUNCTIONS = `
@@ -290,7 +290,7 @@ export interface GeneratedShader {
     duration: number;
 }
 
-// Generate shader from user prompt using OpenRouter
+// Generate shader from user prompt using Gemini API
 export async function generateShaderFromPrompt(
     prompt: string,
     vibe: string = 'Random',
@@ -299,8 +299,8 @@ export async function generateShaderFromPrompt(
     duration: number = 10
 ): Promise<GeneratedShader> {
     try {
-        if (!OPENROUTER_API_KEY) {
-            throw new Error('OPENROUTER_API_KEY is not defined in environment variables');
+        if (!GEMINI_API_KEY) {
+            throw new Error('GEMINI_API_KEY is not defined in environment variables');
         }
 
         // --- Speed Logic ---
@@ -351,54 +351,54 @@ export async function generateShaderFromPrompt(
 
         const fullSystemPrompt = `${SHADER_SYSTEM_PROMPT}\n\n${vibeInstruction}\n${complexityInstruction}\n${speedInstruction}\n${loopInstruction}`;
 
-        const messages = [
-            {
-                role: 'system',
-                content: fullSystemPrompt
-            },
-            {
-                role: 'user',
-                content: `Create a shader for: ${prompt}. Ensure it loops every ${duration} seconds.`
-            }
-        ];
+        const userMessage = `Create a shader for: ${prompt}. Ensure it loops every ${duration} seconds.`;
 
-        const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+        // Gemini API request body
+        const requestBody = {
+            system_instruction: {
+                parts: [{ text: fullSystemPrompt }]
+            },
+            contents: [
+                {
+                    role: 'user',
+                    parts: [{ text: userMessage }]
+                }
+            ],
+            generationConfig: {
+                maxOutputTokens: 2000,
+                temperature: 0.8,
+            }
+        };
+
+        const response = await fetch(`${GEMINI_BASE_URL}?key=${GEMINI_API_KEY}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-                'HTTP-Referer': 'https://saas-generative-art.com', // Required by OpenRouter
-                'X-Title': 'SaaS Generative Art' // Required by OpenRouter
             },
-            body: JSON.stringify({
-                model: MODEL_ID,
-                messages: messages,
-                max_tokens: 2000,
-                temperature: 0.8,
-            })
+            body: JSON.stringify(requestBody)
         });
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(`OpenRouter API Error: ${response.status} ${response.statusText} - ${JSON.stringify(errorData)}`);
+            throw new Error(`Gemini API Error: ${response.status} ${response.statusText} - ${JSON.stringify(errorData)}`);
         }
 
         const data = await response.json();
-        const text = data.choices?.[0]?.message?.content || '';
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
         // ... existing extraction ...
         const mainCode = extractGLSLCode(text);
-        const fragmentCode = buildFullShader(mainCode, duration); // Correctly pass duration
+        const fragmentCode = buildFullShader(mainCode, duration);
 
         return {
             id: generateId(),
             prompt,
             fragmentCode,
             timestamp: Date.now(),
-            duration // Return the native loop duration
+            duration
         };
     } catch (error) {
-        console.error('Failed to generate shader (OpenRouter):', error);
+        console.error('Failed to generate shader (Gemini):', error);
         throw new Error('Failed to generate shader from AI');
     }
 }
@@ -522,6 +522,14 @@ function cleanCode(code: string): string {
     // We force lightDir to vec3 just in case, and result to vec3.
     code = code.replace(/vec2\s+(\w+)\s*=\s*reflect\s*\(\s*(\w+)\s*,\s*normalize\s*\(\s*vec3/g, 'vec3 $1 = reflect(vec3($2, 0.0), normalize(vec3');
 
+    // Fix 'float *= rot(...)' — rot() returns mat2, can't multiply with float
+    // Pattern: d *= rot(angle); → REMOVE the line (nonsensical operation)
+    code = code.replace(/^\s*\w+\s*\*=\s*rot\s*\([^)]*\)\s*;/gm, '// [AUTO-FIX] Removed invalid float *= rot() (mat2)');
+    // Pattern: d = d * rot(angle); → REMOVE
+    code = code.replace(/^\s*\w+\s*=\s*\w+\s*\*\s*rot\s*\([^)]*\)\s*;/gm, '// [AUTO-FIX] Removed invalid float * rot() (mat2)');
+    // Pattern: float d = ... * rot(angle); → strip the * rot(...) part
+    code = code.replace(/\*\s*rot\s*\(\s*[^)]*\s*\)/g, '/* rot removed */');
+
     // Fix 'hash' returning float when assigned to vec2 (AI mistake)
     // Pattern: vec2 p = hash(uv); -> vec2 p = hash2(uv);
     code = code.replace(/vec2\s+(\w+)\s*=\s*hash\s*\(/g, 'vec2 $1 = hash2(');
@@ -546,10 +554,17 @@ function cleanCode(code: string): string {
         return match;
     });
 
+    // Fix 'vec3 x = dot(...)' — dot() ALWAYS returns float, never vec3
+    // This is a very common AI mistake. Catch ALL variable names.
+    code = code.replace(/vec3\s+(\w+)\s*=\s*dot\s*\(/g, 'float $1 = dot(');
+
+    // Fix 'vec3 x = clamp(dot(...))' or 'vec3 x = clamp(float_expr, ...)'
+    code = code.replace(/vec3\s+(\w+)\s*=\s*clamp\s*\(\s*dot\s*\(/g, 'float $1 = clamp(dot(');
+
     // Fix 'specularIntensity' or similar dot-product results assigned to vec3 (should be float)
     // Pattern: vec3 var = pow(max(dot(...)...)...); -> float var = ...
     // Case 1: vec3 specularIntensity = pow... (Direct match)
-    code = code.replace(/vec3\s+(specularIntensity|specular|highlight)\s*=\s*(pow|max|dot)/g, 'float $1 = $2');
+    code = code.replace(/vec3\s+(specularIntensity|specular|highlight|diffuse)\s*=\s*(pow|max|dot|clamp|abs|min|length|distance|step|smoothstep)/g, 'float $1 = $2');
 
     // Case 2: General vec3 = pow(max(dot...  (Already covered but reinforcing)
     code = code.replace(/vec3\s+(\w+)\s*=\s*pow\s*\(\s*max\s*\(\s*dot/g, 'float $1 = pow(max(dot');

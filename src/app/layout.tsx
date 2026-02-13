@@ -7,6 +7,8 @@ export const metadata: Metadata = {
   keywords: ["abstract motion", "background generator", "stock video", "AI video", "motion graphics", "procedural animation"],
 };
 
+import Navbar from "@/components/Navbar";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -21,6 +23,7 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
       </head>
       <body>
+        <Navbar />
         {children}
       </body>
     </html>

@@ -43,11 +43,7 @@ export default function HomePage() {
 
   return (
     <main className="app-container">
-      {/* Header */}
-      <header className="app-header">
-        <h1><span className="material-symbols-outlined" style={{ fontSize: '32px', verticalAlign: 'middle', marginRight: '8px' }}>brush</span> AI Art Generator</h1>
-        <p>Create stunning abstract motion art with AI</p>
-      </header>
+      {/* Header Removed (Using Global Navbar) */}
 
       <div className="app-content">
         {/* Left Panel - Controls */}
