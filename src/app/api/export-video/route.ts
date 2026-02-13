@@ -63,10 +63,11 @@ export async function POST(request: NextRequest) {
             }
 
             // Stream the video back to the client
+            const format = body.format || 'mp4';
             return new NextResponse(response.body, {
                 headers: {
-                    'Content-Type': 'video/mp4',
-                    'Content-Disposition': `attachment; filename="video.mp4"`,
+                    'Content-Type': `video/${format}`,
+                    'Content-Disposition': `attachment; filename="video.${format}"`,
                 },
             });
 
@@ -210,8 +211,8 @@ export async function POST(request: NextRequest) {
         // Return video
         return new NextResponse(videoBuffer, {
             headers: {
-                'Content-Type': 'video/mp4',
-                'Content-Disposition': `attachment; filename="ai-art-${Date.now()}.mp4"`,
+                'Content-Type': `video/${format}`,
+                'Content-Disposition': `attachment; filename="ai-art-${Date.now()}.${format}"`,
                 'Content-Length': videoBuffer.length.toString()
             }
         });

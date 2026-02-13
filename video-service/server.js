@@ -107,8 +107,13 @@ app.post('/export', async (req, res) => {
         browser = null;
 
         // Encode
+        // Standardize output to H.264 for both MP4 and MOV to ensure consistent file size.
+        // Use CRF 14 for 4K (High Quality), 16 for FHD, 18 for HD.
         const output = path.join(tempDir, `output.${format}`);
-        const crf = quality === '4K' ? 14 : 18;
+
+        let crf = 18;
+        if (quality === '4K') crf = 14;
+        if (quality === 'FHD') crf = 16;
 
         await new Promise((resolve, reject) => {
             ffmpeg()
