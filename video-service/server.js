@@ -107,7 +107,9 @@ async function processVideoExport(jobId, data) {
         const framesDir = path.join(tempDir, 'frames');
         fs.mkdirSync(framesDir);
 
-        const isRailway = process.env.RAILWAY_ENVIRONMENT === 'true' || process.env.NODE_ENV === 'production';
+        // Stronger detection for Linux / Railway
+        const isLinuxOrProd = process.platform === 'linux' || process.env.RAILWAY_ENVIRONMENT === 'true' || process.env.NODE_ENV === 'production';
+
         const browserArgs = [
             '--no-sandbox',
             '--disable-setuid-sandbox',
@@ -116,12 +118,14 @@ async function processVideoExport(jobId, data) {
             '--ignore-gpu-blocklist'
         ];
 
-        if (isRailway) {
+        if (isLinuxOrProd) {
+            // Railway/Linux requires software rendering flags and headless mode
             browserArgs.push('--disable-gpu', '--use-gl=angle', '--use-angle=swiftshader');
         }
 
         browser = await puppeteer.launch({
-            headless: isRailway ? true : false,
+            // Force true for linux/railway, false for local Mac development
+            headless: isLinuxOrProd ? true : false,
             args: browserArgs
         });
 
