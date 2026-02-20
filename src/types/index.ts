@@ -11,6 +11,8 @@ export interface GeneratedShader {
 
 export type GenerationMode = 'prompt' | 'random';
 export type AspectRatio = '16:9' | '9:16' | '1:1';
+export type ColorPalette = 'Auto' | 'Sunset' | 'Ocean' | 'Neon' | 'Pastel' | 'Monochrome' | 'Fire' | 'Forest';
+export type MotionStyle = 'Random' | 'Flow' | 'Rotate' | 'Pulse' | 'Morph' | 'Glitch';
 
 export interface GenerationRequest {
     mode: GenerationMode;

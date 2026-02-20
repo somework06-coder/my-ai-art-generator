@@ -13,18 +13,148 @@ void main() {
 }
 `;
 
-// Fallback fragment shader
-const FALLBACK_FRAGMENT = `
-uniform float uTime;
-uniform vec2 uResolution;
-varying vec2 vUv;
+// Pool of diverse fallback fragment shaders (picked randomly on error)
+const FALLBACK_POOL: string[] = [
 
+    // 1. Aurora Waves
+    `uniform float uTime; uniform vec2 uResolution; varying vec2 vUv;
+void main() {
+    vec2 uv = vUv * 2.0 - 1.0;
+    uv.x *= uResolution.x / uResolution.y;
+    float t = uTime * 0.5;
+    vec3 col = vec3(0.0);
+    for (float i = 1.0; i < 6.0; i++) {
+        uv.y += sin(uv.x * i * 1.5 + t * i * 0.3) * 0.15 / i;
+        float d = abs(uv.y);
+        col += vec3(0.1, 0.4, 0.7) / (d * 40.0 + 0.5) * (1.0 + 0.5 * sin(t + i));
+    }
+    col = pow(col, vec3(0.8));
+    gl_FragColor = vec4(col, 1.0);
+}`,
+
+    // 2. Liquid Metal
+    `uniform float uTime; uniform vec2 uResolution; varying vec2 vUv;
+void main() {
+    vec2 uv = vUv * 2.0 - 1.0;
+    uv.x *= uResolution.x / uResolution.y;
+    float t = uTime * 0.4;
+    float r = length(uv);
+    float a = atan(uv.y, uv.x);
+    float wave = sin(r * 10.0 - t * 3.0) * cos(a * 3.0 + t);
+    vec3 col = 0.5 + 0.5 * cos(vec3(wave * 3.0 + t, wave * 2.0 + 1.0, wave + 2.0));
+    col *= 1.0 - r * 0.4;
+    col = pow(col, vec3(0.9));
+    gl_FragColor = vec4(col, 1.0);
+}`,
+
+    // 3. Neon Grid
+    `uniform float uTime; uniform vec2 uResolution; varying vec2 vUv;
+void main() {
+    vec2 uv = vUv * 2.0 - 1.0;
+    uv.x *= uResolution.x / uResolution.y;
+    float t = uTime * 0.3;
+    vec2 grid = fract(uv * 4.0 + t * 0.2) - 0.5;
+    float d = min(abs(grid.x), abs(grid.y));
+    float glow = 0.02 / (d + 0.02);
+    vec3 col = glow * vec3(0.9, 0.2, 0.8) * 0.4;
+    col += 0.01 / (abs(sin(uv.y * 8.0 + t * 2.0)) + 0.02) * vec3(0.2, 0.6, 1.0) * 0.3;
+    col *= 1.0 - length(uv) * 0.3;
+    gl_FragColor = vec4(col, 1.0);
+}`,
+
+    // 4. Cosmic Dust
+    `uniform float uTime; uniform vec2 uResolution; varying vec2 vUv;
+void main() {
+    vec2 uv = vUv * 2.0 - 1.0;
+    uv.x *= uResolution.x / uResolution.y;
+    float t = uTime * 0.2;
+    vec3 col = vec3(0.0);
+    for (float i = 0.0; i < 5.0; i++) {
+        vec2 p = uv * (1.0 + i * 0.3);
+        p += vec2(sin(t + i), cos(t * 0.7 + i)) * 0.5;
+        float d = length(fract(p) - 0.5);
+        col += vec3(0.3, 0.1, 0.5) / (d * 20.0 + 0.3) * 0.15;
+    }
+    col += vec3(0.05, 0.0, 0.1);
+    gl_FragColor = vec4(col, 1.0);
+}`,
+
+    // 5. Crystal Prism
+    `uniform float uTime; uniform vec2 uResolution; varying vec2 vUv;
+void main() {
+    vec2 uv = vUv * 2.0 - 1.0;
+    uv.x *= uResolution.x / uResolution.y;
+    float t = uTime * 0.6;
+    float angle = atan(uv.y, uv.x) + t;
+    float r = length(uv);
+    float facets = floor(angle / 0.524 + 0.5) * 0.524;
+    vec3 col = 0.5 + 0.5 * cos(vec3(facets * 6.0, facets * 4.0 + 2.0, facets * 2.0 + 4.0) + t);
+    col *= smoothstep(1.2, 0.0, r);
+    col += vec3(1.0) * smoothstep(0.02, 0.0, abs(fract(angle / 0.524) - 0.5) - 0.48) * 0.3;
+    gl_FragColor = vec4(col, 1.0);
+}`,
+
+    // 6. Ocean Depth
+    `uniform float uTime; uniform vec2 uResolution; varying vec2 vUv;
+void main() {
+    vec2 uv = vUv * 2.0 - 1.0;
+    uv.x *= uResolution.x / uResolution.y;
+    float t = uTime * 0.3;
+    vec3 col = vec3(0.0, 0.05, 0.15);
+    for (float i = 1.0; i < 8.0; i++) {
+        float wave = sin(uv.x * i * 2.0 + t * i * 0.5 + i) * 0.1 / i;
+        uv.y += wave;
+    }
+    float caustic = sin(uv.x * 15.0 + t) * sin(uv.y * 15.0 + t * 0.7);
+    col += vec3(0.0, 0.3, 0.5) * (caustic * 0.3 + 0.3);
+    col *= 1.0 - length(vUv - 0.5) * 0.8;
+    gl_FragColor = vec4(col, 1.0);
+}`,
+
+    // 7. Plasma Orb
+    `uniform float uTime; uniform vec2 uResolution; varying vec2 vUv;
+void main() {
+    vec2 uv = vUv * 2.0 - 1.0;
+    uv.x *= uResolution.x / uResolution.y;
+    float t = uTime * 0.5;
+    float r = length(uv);
+    float plasma = sin(uv.x * 10.0 + t) + sin(uv.y * 10.0 + t * 1.1);
+    plasma += sin((uv.x + uv.y) * 7.0 + t * 0.7);
+    plasma += sin(r * 12.0 - t * 2.0);
+    plasma *= 0.25;
+    vec3 col = 0.5 + 0.5 * cos(vec3(plasma + t, plasma + 2.1, plasma + 4.2));
+    col *= smoothstep(1.0, 0.2, r);
+    gl_FragColor = vec4(col, 1.0);
+}`,
+
+    // 8. Digital Rain
+    `uniform float uTime; uniform vec2 uResolution; varying vec2 vUv;
 void main() {
     vec2 uv = vUv;
-    vec3 color = 0.5 + 0.5 * cos(uTime + uv.xyx + vec3(0, 2, 4));
-    gl_FragColor = vec4(color, 1.0);
+    uv.x *= uResolution.x / uResolution.y;
+    float t = uTime * 0.4;
+    vec3 col = vec3(0.0);
+    for (float i = 0.0; i < 12.0; i++) {
+        float x = fract(sin(i * 127.1) * 43758.5453);
+        float speed = 0.3 + fract(sin(i * 311.7) * 43758.5453) * 0.7;
+        float y = fract(t * speed + fract(sin(i * 269.5) * 43758.5453));
+        vec2 p = vec2(x * (uResolution.x / uResolution.y), 1.0 - y);
+        float d = length(uv - p);
+        float trail = smoothstep(0.3, 0.0, abs(uv.x - p.x) * 30.0) * smoothstep(0.0, 0.3, uv.y - p.y + 0.3) * smoothstep(0.5, 0.0, uv.y - p.y);
+        col += vec3(0.1, 0.8, 0.3) * (0.005 / (d + 0.005) + trail * 0.1);
+    }
+    gl_FragColor = vec4(col, 1.0);
+}`
+
+];
+
+// Get a random fallback shader
+function getRandomFallback(): string {
+    return FALLBACK_POOL[Math.floor(Math.random() * FALLBACK_POOL.length)];
 }
-`;
+
+// Default fallback (first one for initialization)
+const FALLBACK_FRAGMENT = FALLBACK_POOL[0];
 
 export class ShaderRenderer {
     private renderer: THREE.WebGLRenderer | null = null;
@@ -37,6 +167,8 @@ export class ShaderRenderer {
     private startTime: number = 0;
     private canvas: HTMLCanvasElement | null = null;
     private currentFragmentCode: string = FALLBACK_FRAGMENT;
+    private shaderChecked: boolean = false;
+    private hasShaderError: boolean = false;
 
     constructor() {
         this.scene = new THREE.Scene();
@@ -107,6 +239,10 @@ export class ShaderRenderer {
     // Load custom shader code (from AI generation)
     loadShader(fragmentCode: string): { success: boolean; error?: string } {
         try {
+            // Reset shader check flag so we re-validate after next render
+            this.shaderChecked = false;
+            this.hasShaderError = false;
+
             // Create a test material to check for compilation errors
             const testMaterial = new THREE.ShaderMaterial({
                 vertexShader: DEFAULT_VERTEX,
@@ -130,7 +266,9 @@ export class ShaderRenderer {
         } catch (error) {
             console.error('Shader compilation failed, using fallback:', error);
             // Use fallback shader on error
-            this.createMaterial(FALLBACK_FRAGMENT);
+            this.shaderChecked = true;
+            this.hasShaderError = true;
+            this.createMaterial(getRandomFallback());
             return {
                 success: false,
                 error: error instanceof Error ? error.message : 'Unknown shader error'
@@ -160,8 +298,37 @@ export class ShaderRenderer {
 
         if (this.renderer && this.scene && this.camera) {
             this.renderer.render(this.scene, this.camera);
+
+            // Check for WebGL shader compilation errors AFTER first render
+            // (Three.js only compiles shaders on first use)
+            if (!this.shaderChecked && this.material) {
+                this.shaderChecked = true;
+                const gl = this.renderer.getContext();
+                const glError = gl.getError();
+
+                // Also check program info log for shader errors
+                if (glError !== gl.NO_ERROR || this.checkShaderErrors(gl)) {
+                    console.warn('[ShaderRenderer] Shader compile error detected, switching to fallback.');
+                    this.hasShaderError = true;
+                    this.createMaterial(getRandomFallback());
+                }
+            }
         }
     };
+
+    // Check for shader compilation errors via WebGL program diagnostics
+    private checkShaderErrors(gl: WebGLRenderingContext | WebGL2RenderingContext): boolean {
+        try {
+            // Intercept console.error temporarily to detect Three.js shader errors
+            const program = (this.material as any)?.program;
+            if (program && program.diagnostics && !program.diagnostics.runnable) {
+                return true; // Shader is not runnable
+            }
+        } catch {
+            // Ignore — some Three.js versions don't expose diagnostics
+        }
+        return false;
+    }
 
     updateAspectRatio(aspectRatio: AspectRatio): void {
         if (!this.renderer) return;

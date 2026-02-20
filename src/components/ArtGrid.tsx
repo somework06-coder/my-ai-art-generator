@@ -12,10 +12,11 @@ interface ArtGridProps {
     isLibrary?: boolean;
     selectedIds?: string[];
     onToggleSelect?: (id: string) => void;
+    onRemix?: (prompt: string) => void;
 }
 
 
-export default function ArtGrid({ shaders, isLibrary = false, selectedIds = [], onToggleSelect }: ArtGridProps) {
+export default function ArtGrid({ shaders, isLibrary = false, selectedIds = [], onToggleSelect, onRemix }: ArtGridProps) {
     if (shaders.length === 0) {
         return (
             <div className="art-grid-empty">
@@ -35,6 +36,7 @@ export default function ArtGrid({ shaders, isLibrary = false, selectedIds = [], 
                     isLibrary={isLibrary}
                     isSelected={selectedIds.includes(shader.id)}
                     onToggleSelect={onToggleSelect}
+                    onRemix={onRemix}
                 />
             ))}
         </div>
@@ -42,11 +44,12 @@ export default function ArtGrid({ shaders, isLibrary = false, selectedIds = [], 
 }
 
 // Individual Art Item with Modal
-function ArtItem({ shader, isLibrary, isSelected, onToggleSelect }: {
+function ArtItem({ shader, isLibrary, isSelected, onToggleSelect, onRemix }: {
     shader: GeneratedShader,
     isLibrary: boolean,
     isSelected?: boolean,
-    onToggleSelect?: (id: string) => void
+    onToggleSelect?: (id: string) => void,
+    onRemix?: (prompt: string) => void
 }) {
     const canvasRef = useRef<ArtCanvasRef | null>(null);
     const [exporting, setExporting] = useState(false);
@@ -74,11 +77,8 @@ function ArtItem({ shader, isLibrary, isSelected, onToggleSelect }: {
         setStatus('Preparing...');
 
         try {
-            setStatus(`Rendering ${quality} (${duration}s)...`);
-            setProgress(10);
-
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minutes timeout
+            setStatus('Sending to Queue...');
+            setProgress(5);
 
             const response = await fetch('/api/export-video', {
                 method: 'POST',
@@ -90,38 +90,82 @@ function ArtItem({ shader, isLibrary, isSelected, onToggleSelect }: {
                     duration,
                     fps,
                     format
-                }),
-                signal: controller.signal
+                })
             });
 
-            clearTimeout(timeoutId);
+            const data = await response.json();
 
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.error || 'Export failed');
+            if (!response.ok || !data.success || !data.jobId) {
+                throw new Error(data.error || 'Failed to enqueue export job');
             }
 
-            setStatus('Downloading...');
-            setProgress(90);
+            // Start polling function
+            const pollStatus = async (jobId: string) => {
+                try {
+                    const res = await fetch(`/api/export-status/${jobId}`);
+                    const pollData = await res.json();
 
-            const blob = await response.blob();
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `ai-art-${quality}-${duration}s-${shader.id}.${format}`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            setTimeout(() => URL.revokeObjectURL(url), 1000);
+                    if (!res.ok) throw new Error(pollData.error || 'Failed to check status');
 
-            setProgress(100);
-            setStatus('Done!');
+                    if (pollData.status === 'completed' && pollData.videoUrl) {
+                        setStatus('Downloading...');
+                        setProgress(90);
+
+                        // Download the remote URL
+                        const a = document.createElement('a');
+                        a.href = pollData.videoUrl;
+                        a.target = '_blank';
+                        a.download = `video-${Date.now()}.${pollData.format || format}`;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+
+                        setProgress(100);
+                        setStatus('Done!');
+
+                        setTimeout(() => {
+                            setExporting(false);
+                            setProgress(0);
+                            setStatus('');
+                        }, 1500);
+
+                    } else if (pollData.status === 'failed') {
+                        throw new Error(pollData.errorMsg || 'Export failed on server');
+                    } else {
+                        // Pending or Processing
+                        if (pollData.status === 'processing') {
+                            setStatus('Rendering on Server...');
+                            setProgress(prev => prev < 85 ? prev + 5 : 85); // fake progress
+                        } else {
+                            setStatus('Queued...');
+                            setProgress(10);
+                        }
+                        // Poll again in 3 seconds
+                        setTimeout(() => pollStatus(jobId), 3000);
+                    }
+                } catch (err) {
+                    console.error('Polling error:', err);
+                    alert(`Export failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+                    setStatus('Failed');
+                    setTimeout(() => {
+                        setExporting(false);
+                        setProgress(0);
+                        setStatus('');
+                    }, 1500);
+                }
+            };
+
+            // Initiate the polling loop
+            pollStatus(data.jobId);
 
         } catch (err) {
-            console.error('Export failed:', err);
+            console.error('Export start details:', err);
+            if (err instanceof TypeError && err.message === 'Failed to fetch') {
+                alert('Connection Error: Could not reach the server. Is it running?');
+            } else {
+                alert(`Export request failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+            }
             setStatus('Failed');
-            alert(`Download failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
-        } finally {
             setTimeout(() => {
                 setExporting(false);
                 setProgress(0);
@@ -221,6 +265,18 @@ function ArtItem({ shader, isLibrary, isSelected, onToggleSelect }: {
                                 title="Save to Library"
                             >
                                 <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>bookmark_add</span>
+                            </button>
+                        )}
+
+                        {/* Remix Button (only in generator, not library) */}
+                        {!isLibrary && onRemix && (
+                            <button
+                                className="download-btn"
+                                onClick={() => onRemix(shader.prompt)}
+                                style={{ flex: 0, padding: '0 12px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.1)' }}
+                                title="Remix: Generate a variation of this art"
+                            >
+                                <span className="material-symbols-outlined" style={{ fontSize: '20px', color: 'var(--accent)' }}>replay</span>
                             </button>
                         )}
                     </div>

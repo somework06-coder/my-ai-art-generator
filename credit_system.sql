@@ -1,7 +1,7 @@
 -- 1. Add 'credits' column to 'profiles' table
--- Default 3 credits for new users (Free Trial)
+-- Default 50 credits for new users (Was 3)
 ALTER TABLE public.profiles 
-ADD COLUMN IF NOT EXISTS credits INTEGER DEFAULT 3 NOT NULL;
+ADD COLUMN IF NOT EXISTS credits INTEGER DEFAULT 50 NOT NULL;
 
 -- 2. Create 'credit_transactions' table to track usage history
 CREATE TABLE IF NOT EXISTS public.credit_transactions (
@@ -24,8 +24,7 @@ USING (auth.uid() = user_id);
 -- Only Service Role (Backend) can INSERT/UPDATE transactions
 -- (No policy for INSERT/UPDATE for anon/authenticated roles means they are denied by default)
 
--- 5. Create a secure function to deduct credits safely (Atomic Transaction)
--- This prevents race conditions where a user might double-spend credits
+-- 5. FUNCTION: Deduct Credits Safely
 CREATE OR REPLACE FUNCTION deduct_credits(
   p_user_id UUID, 
   p_amount INTEGER, 
@@ -54,6 +53,29 @@ BEGIN
   -- 2. Record transaction (Store negative amount for deduction)
   INSERT INTO public.credit_transactions (user_id, amount, description)
   VALUES (p_user_id, -p_amount, p_description);
+
+  RETURN TRUE;
+END;
+$$;
+
+-- 6. FUNCTION: Increment Credits (For Top Up)
+CREATE OR REPLACE FUNCTION increment_credits(
+  p_user_id UUID, 
+  p_amount INTEGER
+) 
+RETURNS BOOLEAN 
+LANGUAGE plpgsql 
+SECURITY DEFINER
+AS $$
+BEGIN
+  -- 1. Add credits
+  UPDATE public.profiles 
+  SET credits = credits + p_amount 
+  WHERE id = p_user_id;
+
+  -- Transaction log is handled by the API usually, but we could do it here too.
+  -- For now, let's keep it simple and just update balance.
+  -- The API inserts the transaction log separately to include external IDs.
 
   RETURN TRUE;
 END;

@@ -10,7 +10,7 @@ export default function HomePage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleGenerate = async (mode: GenerationMode, aspectRatio: AspectRatio, prompt?: string, count?: number, vibe?: string, complexity?: string, speed?: string, duration?: number) => {
+  const handleGenerate = async (mode: GenerationMode, aspectRatio: AspectRatio, prompt?: string, count?: number, vibe?: string, complexity?: string, speed?: string, duration?: number, palette?: string, motionStyle?: string) => {
     setIsLoading(true);
     setError(null);
 
@@ -18,7 +18,7 @@ export default function HomePage() {
       const response = await fetch('/api/generate-shader', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode, prompt, count, aspectRatio, vibe, complexity, speed, duration }),
+        body: JSON.stringify({ mode, prompt, count, aspectRatio, vibe, complexity, speed, duration, palette, motionStyle }),
       });
 
       const data = await response.json();
@@ -39,6 +39,12 @@ export default function HomePage() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Remix: generate a variation of an existing shader's prompt
+  const handleRemix = (originalPrompt: string) => {
+    const remixPrompt = `Create a NEW VARIATION inspired by this concept: "${originalPrompt}". Use a different color palette, different geometric approach, and different motion pattern, but keep the same overall mood and energy.`;
+    handleGenerate('prompt', shaders[0]?.aspectRatio || '16:9', remixPrompt);
   };
 
   return (
@@ -69,7 +75,7 @@ export default function HomePage() {
 
         {/* Main Area - Art Grid */}
         <section className="art-section">
-          <ArtGrid shaders={shaders} />
+          <ArtGrid shaders={shaders} onRemix={handleRemix} />
         </section>
       </div>
     </main>

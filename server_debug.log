@@ -1,0 +1,555 @@
+
+> temp-project@0.1.0 dev
+> next dev
+
+▲ Next.js 16.1.6 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.1.6:3000
+- Environments: .env.local
+- Experiments (use with caution):
+  · serverActions
+
+✓ Starting...
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+✓ Ready in 1073ms
+ GET / 200 in 642ms (compile: 361ms, proxy.ts: 70ms, render: 210ms)
+ POST /api/generate-shader 200 in 10.1s (compile: 89ms, proxy.ts: 10ms, render: 10.0s)
+Starting video export: 1280x720, 300 frames
+BROWSER LOG: Shader initialized successfully
+Captured frame 1/300
+Captured frame 11/300
+Captured frame 21/300
+Captured frame 31/300
+Captured frame 41/300
+Captured frame 51/300
+Captured frame 61/300
+Captured frame 71/300
+Captured frame 81/300
+Captured frame 91/300
+Captured frame 101/300
+Captured frame 111/300
+Captured frame 121/300
+Captured frame 131/300
+Captured frame 141/300
+Captured frame 151/300
+Captured frame 161/300
+Captured frame 171/300
+Captured frame 181/300
+Captured frame 191/300
+Captured frame 201/300
+Captured frame 211/300
+Captured frame 221/300
+Captured frame 231/300
+Captured frame 241/300
+Captured frame 251/300
+Captured frame 261/300
+Captured frame 271/300
+Captured frame 281/300
+Captured frame 291/300
+All frames captured, encoding video...
+FFmpeg command: ffmpeg -r 30 -i /var/folders/z1/_wfgg04d05d84rmqt_xbkyt40000gn/T/shader-render-Izbfdd/frames/frame_%05d.jpg -y -vcodec libx264 -pix_fmt yuv420p -crf 18 -preset fast -movflags +faststart /var/folders/z1/_wfgg04d05d84rmqt_xbkyt40000gn/T/shader-render-Izbfdd/output.mp4
+Video encoding complete
+Video Export Success! Buffer Size: 3300917 bytes
+ POST /api/export-video 200 in 21.1s (compile: 256ms, proxy.ts: 16ms, render: 20.8s)
+(node:37081) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✓ Compiled in 194ms
+ GET / 200 in 519ms (compile: 241ms, proxy.ts: 34ms, render: 245ms)
+ POST /api/generate-shader 200 in 10.5s (compile: 4ms, proxy.ts: 12ms, render: 10.5s)
+Starting video export: 1280x720, 300 frames
+BROWSER LOG: Shader initialized successfully
+Captured frame 1/300
+Captured frame 11/300
+Captured frame 21/300
+Captured frame 31/300
+Captured frame 41/300
+Captured frame 51/300
+Captured frame 61/300
+Captured frame 71/300
+Captured frame 81/300
+Captured frame 91/300
+Captured frame 101/300
+Captured frame 111/300
+Captured frame 121/300
+Captured frame 131/300
+Captured frame 141/300
+Captured frame 151/300
+Captured frame 161/300
+Captured frame 171/300
+Captured frame 181/300
+Captured frame 191/300
+Captured frame 201/300
+Captured frame 211/300
+Captured frame 221/300
+Captured frame 231/300
+Captured frame 241/300
+Captured frame 251/300
+Captured frame 261/300
+Captured frame 271/300
+Captured frame 281/300
+Captured frame 291/300
+All frames captured, encoding video...
+FFmpeg command: ffmpeg -r 30 -i /var/folders/z1/_wfgg04d05d84rmqt_xbkyt40000gn/T/shader-render-FUH1JH/frames/frame_%05d.jpg -y -vcodec libx264 -pix_fmt yuv420p -crf 18 -preset medium -profile:v main -level 3.1 -movflags +faststart /var/folders/z1/_wfgg04d05d84rmqt_xbkyt40000gn/T/shader-render-FUH1JH/output.mp4
+Video encoding complete
+Video Export Success! Buffer Size: 1879975 bytes
+ POST /api/export-video 200 in 20.9s (compile: 82ms, proxy.ts: 10ms, render: 20.8s)
+ GET / 200 in 150ms (compile: 35ms, proxy.ts: 36ms, render: 79ms)
+ GET / 200 in 64ms (compile: 3ms, proxy.ts: 6ms, render: 55ms)
+ POST /api/generate-shader 200 in 13.6s (compile: 5ms, proxy.ts: 7ms, render: 13.5s)
+Starting video export: 1280x720, 300 frames
+BROWSER LOG: Shader initialized successfully
+Captured frame 1/300
+Captured frame 11/300
+Captured frame 21/300
+Captured frame 31/300
+Captured frame 41/300
+Captured frame 51/300
+Captured frame 61/300
+Captured frame 71/300
+Captured frame 81/300
+Captured frame 91/300
+Captured frame 101/300
+Captured frame 111/300
+Captured frame 121/300
+Captured frame 131/300
+Captured frame 141/300
+Captured frame 151/300
+Captured frame 161/300
+Captured frame 171/300
+Captured frame 181/300
+Captured frame 191/300
+Captured frame 201/300
+Captured frame 211/300
+Captured frame 221/300
+Captured frame 231/300
+Captured frame 241/300
+Captured frame 251/300
+Captured frame 261/300
+Captured frame 271/300
+Captured frame 281/300
+Captured frame 291/300
+All frames captured, encoding video...
+FFmpeg command: ffmpeg -r 30 -i /var/folders/z1/_wfgg04d05d84rmqt_xbkyt40000gn/T/shader-render-uoim9q/frames/frame_%05d.jpg -y -vcodec libx264 -pix_fmt yuv420p -crf 18 -preset medium -profile:v main -level 3.1 -movflags +faststart /var/folders/z1/_wfgg04d05d84rmqt_xbkyt40000gn/T/shader-render-uoim9q/output.mov
+Video encoding complete
+Video Export Success! Buffer Size: 8141677 bytes
+ POST /api/export-video 200 in 21.5s (compile: 7ms, proxy.ts: 15ms, render: 21.5s)
+ GET /login 200 in 243ms (compile: 140ms, proxy.ts: 49ms, render: 54ms)
+ GET / 200 in 337ms (compile: 3ms, proxy.ts: 159ms, render: 175ms)
+ POST /login 303 in 1657ms (compile: 5ms, proxy.ts: 9ms, render: 1643ms)
+ POST /api/generate-shader 200 in 10.6s (compile: 8ms, proxy.ts: 163ms, render: 10.4s)
+Starting video export: 1280x720, 300 frames
+BROWSER LOG: Shader initialized successfully
+Captured frame 1/300
+Captured frame 11/300
+Captured frame 21/300
+Captured frame 31/300
+Captured frame 41/300
+Captured frame 51/300
+Captured frame 61/300
+Captured frame 71/300
+Captured frame 81/300
+Captured frame 91/300
+Captured frame 101/300
+Captured frame 111/300
+Captured frame 121/300
+Captured frame 131/300
+Captured frame 141/300
+Captured frame 151/300
+Captured frame 161/300
+Captured frame 171/300
+Captured frame 181/300
+Captured frame 191/300
+Captured frame 201/300
+Captured frame 211/300
+Captured frame 221/300
+Captured frame 231/300
+Captured frame 241/300
+Captured frame 251/300
+Captured frame 261/300
+Captured frame 271/300
+Captured frame 281/300
+Captured frame 291/300
+All frames captured, encoding video...
+FFmpeg command: ffmpeg -r 30 -i /var/folders/z1/_wfgg04d05d84rmqt_xbkyt40000gn/T/shader-render-jZLgIR/frames/frame_%05d.jpg -y -vcodec libx264 -pix_fmt yuv420p -crf 18 -preset medium -profile:v main -level 3.1 -movflags +faststart /var/folders/z1/_wfgg04d05d84rmqt_xbkyt40000gn/T/shader-render-jZLgIR/output.mp4
+Video encoding complete
+Video Export Success! Buffer Size: 9045367 bytes
+ POST /api/export-video 200 in 22.9s (compile: 5ms, proxy.ts: 392ms, render: 22.5s)
+ GET / 200 in 779ms (compile: 35ms, proxy.ts: 477ms, render: 267ms)
+ POST /api/generate-shader 200 in 11.2s (compile: 7ms, proxy.ts: 207ms, render: 11.0s)
+Starting video export: 1280x720, 300 frames
+BROWSER LOG: Shader initialized successfully
+Captured frame 1/300
+Captured frame 11/300
+Captured frame 21/300
+Captured frame 31/300
+Captured frame 41/300
+Captured frame 51/300
+Captured frame 61/300
+Captured frame 71/300
+Captured frame 81/300
+Captured frame 91/300
+Captured frame 101/300
+Captured frame 111/300
+Captured frame 121/300
+Captured frame 131/300
+Captured frame 141/300
+Captured frame 151/300
+Captured frame 161/300
+Captured frame 171/300
+Captured frame 181/300
+Captured frame 191/300
+Captured frame 201/300
+Captured frame 211/300
+Captured frame 221/300
+Captured frame 231/300
+Captured frame 241/300
+Captured frame 251/300
+Captured frame 261/300
+Captured frame 271/300
+Captured frame 281/300
+Captured frame 291/300
+All frames captured, encoding video...
+FFmpeg command: ffmpeg -r 30 -i /var/folders/z1/_wfgg04d05d84rmqt_xbkyt40000gn/T/shader-render-E2PrSH/frames/frame_%05d.jpg -y -vcodec libx264 -pix_fmt yuv420p -crf 18 -preset medium -profile:v main -level 3.1 -movflags +faststart /var/folders/z1/_wfgg04d05d84rmqt_xbkyt40000gn/T/shader-render-E2PrSH/output.mp4
+Video encoding complete
+Video Export Success! Buffer Size: 427018 bytes
+ POST /api/export-video 200 in 20.2s (compile: 8ms, proxy.ts: 244ms, render: 20.0s)
+Starting video export: 1920x1080, 600 frames
+BROWSER LOG: Shader initialized successfully
+Captured frame 1/600
+Captured frame 11/600
+Captured frame 21/600
+Captured frame 31/600
+Captured frame 41/600
+Captured frame 51/600
+Captured frame 61/600
+Captured frame 71/600
+Captured frame 81/600
+Captured frame 91/600
+Captured frame 101/600
+Captured frame 111/600
+Captured frame 121/600
+Captured frame 131/600
+Captured frame 141/600
+Captured frame 151/600
+Captured frame 161/600
+Captured frame 171/600
+Captured frame 181/600
+Captured frame 191/600
+Captured frame 201/600
+Captured frame 211/600
+Captured frame 221/600
+Captured frame 231/600
+Captured frame 241/600
+Captured frame 251/600
+Captured frame 261/600
+Captured frame 271/600
+Captured frame 281/600
+Captured frame 291/600
+Captured frame 301/600
+Captured frame 311/600
+Captured frame 321/600
+Captured frame 331/600
+Captured frame 341/600
+Captured frame 351/600
+Captured frame 361/600
+Captured frame 371/600
+Captured frame 381/600
+Captured frame 391/600
+Captured frame 401/600
+Captured frame 411/600
+Captured frame 421/600
+Captured frame 431/600
+Captured frame 441/600
+Captured frame 451/600
+Captured frame 461/600
+Captured frame 471/600
+Captured frame 481/600
+Captured frame 491/600
+Captured frame 501/600
+Captured frame 511/600
+Captured frame 521/600
+Captured frame 531/600
+Captured frame 541/600
+Captured frame 551/600
+Captured frame 561/600
+Captured frame 571/600
+Captured frame 581/600
+Captured frame 591/600
+All frames captured, encoding video...
+FFmpeg command: ffmpeg -r 60 -i /var/folders/z1/_wfgg04d05d84rmqt_xbkyt40000gn/T/shader-render-k6HDmY/frames/frame_%05d.jpg -y -vcodec libx264 -pix_fmt yuv420p -crf 16 -preset medium -profile:v main -level 3.1 -movflags +faststart /var/folders/z1/_wfgg04d05d84rmqt_xbkyt40000gn/T/shader-render-k6HDmY/output.mov
+Video encoding complete
+Video Export Success! Buffer Size: 10637411 bytes
+ POST /api/export-video 200 in 63s (compile: 21ms, proxy.ts: 735ms, render: 62s)
+ POST /api/generate-shader 200 in 16.3s (compile: 7ms, proxy.ts: 1169ms, render: 15.1s)
+ POST /api/generate-shader 200 in 13.7s (compile: 9ms, proxy.ts: 541ms, render: 13.1s)
+ POST /api/generate-shader 200 in 11.7s (compile: 8ms, proxy.ts: 834ms, render: 10.8s)
+ POST /api/generate-shader 200 in 11.8s (compile: 6ms, proxy.ts: 501ms, render: 11.3s)
+Starting video export: 3840x2160, 600 frames
+BROWSER LOG: Shader initialized successfully
+Captured frame 1/600
+Captured frame 11/600
+Captured frame 21/600
+Captured frame 31/600
+Captured frame 41/600
+Captured frame 51/600
+Captured frame 61/600
+Captured frame 71/600
+Captured frame 81/600
+Captured frame 91/600
+Captured frame 101/600
+Captured frame 111/600
+Captured frame 121/600
+Captured frame 131/600
+Captured frame 141/600
+Captured frame 151/600
+Captured frame 161/600
+Captured frame 171/600
+Captured frame 181/600
+Captured frame 191/600
+Captured frame 201/600
+Captured frame 211/600
+Captured frame 221/600
+Captured frame 231/600
+Captured frame 241/600
+Captured frame 251/600
+Captured frame 261/600
+Captured frame 271/600
+Captured frame 281/600
+Captured frame 291/600
+Captured frame 301/600
+Captured frame 311/600
+Captured frame 321/600
+Captured frame 331/600
+Captured frame 341/600
+Captured frame 351/600
+Captured frame 361/600
+Captured frame 371/600
+Captured frame 381/600
+Captured frame 391/600
+Captured frame 401/600
+Captured frame 411/600
+Captured frame 421/600
+Captured frame 431/600
+Captured frame 441/600
+Captured frame 451/600
+Captured frame 461/600
+Captured frame 471/600
+Captured frame 481/600
+Captured frame 491/600
+Captured frame 501/600
+Captured frame 511/600
+Captured frame 521/600
+Captured frame 531/600
+Captured frame 541/600
+Captured frame 551/600
+Captured frame 561/600
+Captured frame 571/600
+Captured frame 581/600
+Captured frame 591/600
+All frames captured, encoding video...
+FFmpeg command: ffmpeg -r 60 -i /var/folders/z1/_wfgg04d05d84rmqt_xbkyt40000gn/T/shader-render-fyKbpE/frames/frame_%05d.jpg -y -vcodec libx264 -pix_fmt yuv420p -crf 14 -preset medium -profile:v main -level 3.1 -movflags +faststart /var/folders/z1/_wfgg04d05d84rmqt_xbkyt40000gn/T/shader-render-fyKbpE/output.mp4
+Video encoding complete
+Video Export Success! Buffer Size: 74363934 bytes
+ POST /api/export-video 200 in 3.2min (compile: 7ms, proxy.ts: 426ms, render: 3.2min)
+Starting video export: 1920x1080, 300 frames
+BROWSER LOG: Shader initialized successfully
+Captured frame 1/300
+Captured frame 11/300
+Captured frame 21/300
+Captured frame 31/300
+Captured frame 41/300
+Captured frame 51/300
+Captured frame 61/300
+Captured frame 71/300
+Captured frame 81/300
+Captured frame 91/300
+Captured frame 101/300
+Captured frame 111/300
+Captured frame 121/300
+Captured frame 131/300
+Captured frame 141/300
+Captured frame 151/300
+Captured frame 161/300
+Captured frame 171/300
+Captured frame 181/300
+Captured frame 191/300
+Captured frame 201/300
+Captured frame 211/300
+Captured frame 221/300
+Captured frame 231/300
+Captured frame 241/300
+Captured frame 251/300
+Captured frame 261/300
+Captured frame 271/300
+Captured frame 281/300
+Captured frame 291/300
+All frames captured, encoding video...
+FFmpeg command: ffmpeg -r 30 -i /var/folders/z1/_wfgg04d05d84rmqt_xbkyt40000gn/T/shader-render-UwAUT3/frames/frame_%05d.jpg -y -vcodec libx264 -pix_fmt yuv420p -crf 16 -preset medium -profile:v main -level 3.1 -movflags +faststart /var/folders/z1/_wfgg04d05d84rmqt_xbkyt40000gn/T/shader-render-UwAUT3/output.mp4
+Video encoding complete
+Video Export Success! Buffer Size: 15013883 bytes
+ POST /api/export-video 200 in 32.5s (compile: 39ms, proxy.ts: 601ms, render: 31.9s)
+ GET / 200 in 2.9s (compile: 31ms, proxy.ts: 1995ms, render: 857ms)
+ POST /api/generate-shader 200 in 12.4s (compile: 237ms, proxy.ts: 1778ms, render: 10.4s)
+Starting video export: 1280x720, 300 frames
+BROWSER LOG: Shader initialized successfully
+Captured frame 1/300
+Captured frame 11/300
+Captured frame 21/300
+Captured frame 31/300
+Captured frame 41/300
+Captured frame 51/300
+Captured frame 61/300
+Captured frame 71/300
+Captured frame 81/300
+Captured frame 91/300
+Captured frame 101/300
+Captured frame 111/300
+Captured frame 121/300
+Captured frame 131/300
+Captured frame 141/300
+Captured frame 151/300
+Captured frame 161/300
+Captured frame 171/300
+Captured frame 181/300
+Captured frame 191/300
+Captured frame 201/300
+Captured frame 211/300
+Captured frame 221/300
+Captured frame 231/300
+Captured frame 241/300
+Captured frame 251/300
+Captured frame 261/300
+Captured frame 271/300
+Captured frame 281/300
+Captured frame 291/300
+All frames captured, encoding video...
+FFmpeg command: ffmpeg -r 30 -i /var/folders/z1/_wfgg04d05d84rmqt_xbkyt40000gn/T/shader-render-FMYAeZ/frames/frame_%05d.jpg -y -vcodec libx264 -pix_fmt yuv420p -crf 18 -preset medium -profile:v main -level 3.1 -movflags +faststart /var/folders/z1/_wfgg04d05d84rmqt_xbkyt40000gn/T/shader-render-FMYAeZ/output.mp4
+Video encoding complete
+Video Export Success! Buffer Size: 3151184 bytes
+ POST /api/export-video 200 in 23.8s (compile: 8ms, proxy.ts: 345ms, render: 23.4s)
+Starting video export: 1920x1080, 300 frames
+BROWSER LOG: Shader initialized successfully
+Captured frame 1/300
+Captured frame 11/300
+Captured frame 21/300
+Captured frame 31/300
+Captured frame 41/300
+Captured frame 51/300
+Captured frame 61/300
+Captured frame 71/300
+Captured frame 81/300
+Captured frame 91/300
+Captured frame 101/300
+Captured frame 111/300
+Captured frame 121/300
+Captured frame 131/300
+Captured frame 141/300
+Captured frame 151/300
+Captured frame 161/300
+Captured frame 171/300
+Captured frame 181/300
+Captured frame 191/300
+Captured frame 201/300
+Captured frame 211/300
+Captured frame 221/300
+Captured frame 231/300
+Captured frame 241/300
+Captured frame 251/300
+Captured frame 261/300
+Captured frame 271/300
+Captured frame 281/300
+Captured frame 291/300
+All frames captured, encoding video...
+FFmpeg command: ffmpeg -r 30 -i /var/folders/z1/_wfgg04d05d84rmqt_xbkyt40000gn/T/shader-render-nQlyxe/frames/frame_%05d.jpg -y -vcodec libx264 -pix_fmt yuv420p -crf 16 -preset medium -profile:v main -level 3.1 -movflags +faststart /var/folders/z1/_wfgg04d05d84rmqt_xbkyt40000gn/T/shader-render-nQlyxe/output.mov
+Video encoding complete
+Video Export Success! Buffer Size: 11686365 bytes
+ POST /api/export-video 200 in 32.2s (compile: 9ms, proxy.ts: 811ms, render: 31.4s)
+Starting video export: 1280x720, 300 frames
+BROWSER LOG: Shader initialized successfully
+Captured frame 1/300
+Captured frame 11/300
+Captured frame 21/300
+Captured frame 31/300
+Captured frame 41/300
+Captured frame 51/300
+Captured frame 61/300
+Captured frame 71/300
+Captured frame 81/300
+Captured frame 91/300
+Captured frame 101/300
+Captured frame 111/300
+Captured frame 121/300
+Captured frame 131/300
+Captured frame 141/300
+Captured frame 151/300
+Captured frame 161/300
+Captured frame 171/300
+Captured frame 181/300
+Captured frame 191/300
+Captured frame 201/300
+Captured frame 211/300
+Captured frame 221/300
+Captured frame 231/300
+Captured frame 241/300
+Captured frame 251/300
+Captured frame 261/300
+Captured frame 271/300
+Captured frame 281/300
+Captured frame 291/300
+All frames captured, encoding video...
+FFmpeg command: ffmpeg -r 30 -i /var/folders/z1/_wfgg04d05d84rmqt_xbkyt40000gn/T/shader-render-P413UR/frames/frame_%05d.jpg -y -vcodec libx264 -pix_fmt yuv420p -crf 18 -preset medium -profile:v main -level 3.1 -movflags +faststart /var/folders/z1/_wfgg04d05d84rmqt_xbkyt40000gn/T/shader-render-P413UR/output.mov
+Video encoding complete
+Video Export Success! Buffer Size: 1008938 bytes
+ POST /api/export-video 200 in 22.6s (compile: 11ms, proxy.ts: 797ms, render: 21.8s)
+ POST /api/generate-shader 200 in 10.4s (compile: 9ms, proxy.ts: 379ms, render: 10.0s)
+Starting video export: 1080x1920, 300 frames
+BROWSER LOG: THREE.WebGLRenderer: Error creating WebGL context.
+BROWSER LOG: Error creating WebGLRenderer: Error: Error creating WebGL context.
+Video export error: Error: Failed to initialize WebGLRenderer: Error creating WebGL context.
+    at evaluate (evaluate at POST (/Users/pslmacbook/Documents/MY WEBSITE WORK/Saas Ai GENERATIVE ART/.next/dev/server/chunks/[root-of-the-server]__c4dea71b._.js:206:20), <anonymous>:1:19)
+    at async POST (src/app/api/export-video/route.ts:133:9)
+    at init (public/render.html:59:22)
+  131 |
+  132 |         // Initialize shader
+> 133 |         await page.evaluate((code: string, w: number, h: number) => {
+      |         ^
+  134 |             (window as unknown as { initShader: (w: number, h: number, code: string) => void }).initShader(w, h, code);
+  135 |         }, shaderCode, width, height);
+  136 |
+ POST /api/export-video 500 in 5.0s (compile: 79ms, proxy.ts: 456ms, render: 4.4s)
+ GET / 200 in 653ms (compile: 14ms, proxy.ts: 424ms, render: 215ms)
+ POST /api/generate-shader 200 in 10.3s (compile: 4ms, proxy.ts: 155ms, render: 10.2s)
+Starting video export: 1920x1080, 300 frames
+BROWSER LOG: THREE.WebGLRenderer: Error creating WebGL context.
+BROWSER LOG: Error creating WebGLRenderer: Error: Error creating WebGL context.
+Video export error: Error: Failed to initialize WebGLRenderer: Error creating WebGL context.
+    at evaluate (evaluate at POST (/Users/pslmacbook/Documents/MY WEBSITE WORK/Saas Ai GENERATIVE ART/.next/dev/server/chunks/[root-of-the-server]__c4dea71b._.js:206:20), <anonymous>:1:19)
+    at async POST (src/app/api/export-video/route.ts:133:9)
+    at init (public/render.html:59:22)
+  131 |
+  132 |         // Initialize shader
+> 133 |         await page.evaluate((code: string, w: number, h: number) => {
+      |         ^
+  134 |             (window as unknown as { initShader: (w: number, h: number, code: string) => void }).initShader(w, h, code);
+  135 |         }, shaderCode, width, height);
+  136 |
+ POST /api/export-video 500 in 2.9s (compile: 70ms, proxy.ts: 253ms, render: 2.5s)
+ GET / 200 in 493ms (compile: 15ms, proxy.ts: 279ms, render: 200ms)
+ POST /api/generate-shader 200 in 8.2s (compile: 10ms, proxy.ts: 148ms, render: 8.0s)
+Starting video export: 1920x1080, 300 frames
+BROWSER LOG: Shader initialized successfully
+Captured frame 1/300
+Captured frame 31/300
+Captured frame 61/300
+Captured frame 91/300
+Captured frame 121/300
+Captured frame 151/300
+Captured frame 181/300
+Captured frame 211/300
+Captured frame 241/300
+Captured frame 271/300
+All frames captured, encoding video...
+FFmpeg command: ffmpeg -r 30 -i /var/folders/z1/_wfgg04d05d84rmqt_xbkyt40000gn/T/shader-render-unoNMY/frames/frame_%05d.jpg -y -vcodec libx264 -pix_fmt yuv420p -crf 16 -preset medium -profile:v main -level 3.1 -movflags +faststart /var/folders/z1/_wfgg04d05d84rmqt_xbkyt40000gn/T/shader-render-unoNMY/output.mov
+Video encoding complete
+Video Export Success! Buffer Size: 31601416 bytes
+ POST /api/export-video 200 in 32.6s (compile: 82ms, proxy.ts: 445ms, render: 32.1s)

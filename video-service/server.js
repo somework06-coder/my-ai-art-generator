@@ -1,6 +1,6 @@
 
+require('dotenv').config();
 const express = require('express');
-const puppeteer = require('puppeteer');
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
 const path = require('path');
@@ -10,6 +10,7 @@ const cors = require('cors');
 const { Worker } = require('bullmq');
 const { createClient } = require('@supabase/supabase-js');
 const Redis = require('ioredis');
+const puppeteer = require('puppeteer');
 
 // Set FFmpeg path
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
@@ -106,9 +107,22 @@ async function processVideoExport(jobId, data) {
         const framesDir = path.join(tempDir, 'frames');
         fs.mkdirSync(framesDir);
 
+        const isRailway = process.env.RAILWAY_ENVIRONMENT === 'true' || process.env.NODE_ENV === 'production';
+        const browserArgs = [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--enable-webgl',
+            '--ignore-gpu-blocklist'
+        ];
+
+        if (isRailway) {
+            browserArgs.push('--disable-gpu', '--use-gl=angle', '--use-angle=swiftshader');
+        }
+
         browser = await puppeteer.launch({
-            headless: 'shell',
-            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--enable-webgl', '--ignore-gpu-blocklist']
+            headless: isRailway ? true : false,
+            args: browserArgs
         });
 
         const page = await browser.newPage();
@@ -144,30 +158,24 @@ async function processVideoExport(jobId, data) {
 
         console.log(`[Job ${jobId}] Video encoded successfully.`);
 
-        // If Supabase is configured, upload the result
-        let videoUrl = null;
-        if (supabase) {
-            const fileBuffer = fs.readFileSync(output);
-            const fileName = `exports/${jobId}.${format}`;
-
-            console.log(`[Job ${jobId}] Uploading to Supabase Storage...`);
-            const { data: uploadData, error: uploadError } = await supabase.storage
-                .from('exports') // Ensure this bucket exists!
-                .upload(fileName, fileBuffer, {
-                    contentType: `video/${format}`,
-                    upsert: true
-                });
-
-            if (uploadError) throw uploadError;
-
-            // Get Public URL
-            const { data: { publicUrl } } = supabase.storage
-                .from('exports')
-                .getPublicUrl(fileName);
-
-            videoUrl = publicUrl;
-            console.log(`[Job ${jobId}] Uploaded: ${videoUrl}`);
+        // Bypass Supabase Storage entirely - Proxy Delivery
+        const publicExportsDir = path.join(__dirname, 'public_exports');
+        if (!fs.existsSync(publicExportsDir)) {
+            fs.mkdirSync(publicExportsDir, { recursive: true });
         }
+
+        const fileName = `${jobId}.${format}`;
+        const finalOutputPath = path.join(publicExportsDir, fileName);
+
+        fs.copyFileSync(output, finalOutputPath);
+        console.log(`[Job ${jobId}] Saved locally to: ${finalOutputPath}`);
+
+        const domain = process.env.RAILWAY_PUBLIC_DOMAIN
+            ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+            : `http://localhost:${PORT}`;
+
+        const videoUrl = `${domain}/download/${fileName}`;
+        console.log(`[Job ${jobId}] Proxy URL Ready: ${videoUrl}`);
 
         // Clean up
         fs.rmSync(tempDir, { recursive: true, force: true });
@@ -183,12 +191,43 @@ async function processVideoExport(jobId, data) {
 }
 
 
-// --- HTTP Server (Legacy / Health Check) ---
+// --- HTTP Server (Legacy / Health Check / Downloads) ---
 app.get('/', (req, res) => res.send('Video Service Worker Running.'));
 
 app.get('/health', async (req, res) => {
     const redisStatus = connection && connection.status === 'ready' ? 'connected' : 'disconnected';
     res.json({ status: 'ok', redis: redisStatus });
+});
+
+// Proxy Download Endpoint (Bypasses Supabase Storage)
+// This serves the video and then IMMEDIATELY deletes it from disk to save space.
+app.get('/download/:filename', (req, res) => {
+    const filename = req.params.filename;
+    // Prevent directory traversal attacks
+    if (filename.includes('/') || filename.includes('..')) {
+        return res.status(400).send('Invalid filename');
+    }
+
+    const filePath = path.join(__dirname, 'public_exports', filename);
+
+    if (!fs.existsSync(filePath)) {
+        return res.status(404).send('File not found or already downloaded/deleted.');
+    }
+
+    res.download(filePath, filename, (err) => {
+        if (err) {
+            console.error(`[Download Error] serving ${filename}:`, err);
+        } else {
+            console.log(`[Auto-Cleanup] Download complete. Deleting ${filename} from worker disk.`);
+            try {
+                if (fs.existsSync(filePath)) {
+                    fs.unlinkSync(filePath);
+                }
+            } catch (unlinkErr) {
+                console.error(`Failed to delete ${filename}:`, unlinkErr);
+            }
+        }
+    });
 });
 
 // Allow direct HTTP export (optional, useful for testing without queue)

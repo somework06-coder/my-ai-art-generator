@@ -35,8 +35,15 @@ export async function batchExport(artworkIds: string[], settings: {
     // 3. Create Jobs
     const jobsToInsert = artworks.map(art => ({
         user_id: user.id,
+        shader_code: art.shader_code,
         status: 'pending',
-        created_at: new Date().toISOString()
+        settings: {
+            quality: settings.quality,
+            format: settings.format,
+            fps: settings.fps,
+            aspectRatio: art.params?.aspectRatio || '16:9',
+            duration: art.params?.duration || 10
+        }
     }))
 
     const { data: insertedJobs, error: jobError } = await supabase
@@ -44,32 +51,26 @@ export async function batchExport(artworkIds: string[], settings: {
         .insert(jobsToInsert)
         .select()
 
-    if (jobError) {
+    if (jobError || !insertedJobs) {
         console.error('Error creating jobs:', jobError)
         return { error: 'Failed to create export jobs.' }
     }
 
     // 4. Push to Queue
-    // We map insertedJobs back to artworks to get shader code
-    const queuePromises = insertedJobs.map(async (job, index) => {
-        // Since we inserted in same order (hopefully), or we can match index if array length matches
-        // But safer to rely on index if we assume synchronous order preservation in DB insert (usually true for simple inserts)
-        // OR better: we can't guarantee ID match easily without complex logic.
-        // Actually, let's just push to queue with the data directly.
-        // But we need the job.id for the DB update later by worker.
-
-        // Let's match by index for now as it's a batch insert.
-        const art = artworks[index];
-
+    // We can safely match by DB job data now
+    const queuePromises = insertedJobs.map(async (job) => {
+        const s = job.settings;
         await videoExportQueue.add('export-job', {
-            jobDbId: job.id, // Critical for worker updates
-            shaderCode: art.shader_code,
-            prompt: art.prompt,
-            aspectRatio: art.params?.aspectRatio || '16:9',
-            duration: art.params?.duration || 10,
-            quality: settings.quality,
-            format: settings.format,
-            fps: settings.fps
+            jobDbId: job.id,
+            shaderCode: job.shader_code,
+            aspectRatio: s.aspectRatio,
+            duration: s.duration,
+            quality: s.quality,
+            format: s.format,
+            fps: s.fps
+        }, {
+            attempts: 3,
+            backoff: { type: 'exponential', delay: 2000 }
         })
     })
 

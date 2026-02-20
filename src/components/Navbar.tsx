@@ -2,6 +2,7 @@
 import { createClient } from "@/utils/supabase/server"
 import Link from "next/link"
 import AuthButton from "./AuthButton"
+import CreditBalance from "./CreditBalance"
 
 export default async function Navbar() {
     const supabase = await createClient()
@@ -103,6 +104,8 @@ export default async function Navbar() {
                             background: 'rgba(255,255,255,0.1)',
                         }} />
                     )}
+
+                    {user && <CreditBalance />}
 
                     <AuthButton user={user} />
                 </div>

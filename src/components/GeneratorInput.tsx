@@ -2,10 +2,10 @@
 'use client';
 
 import { useState } from 'react';
-import { GenerationMode, AspectRatio } from '@/types';
+import { GenerationMode, AspectRatio, ColorPalette, MotionStyle } from '@/types';
 
 interface GeneratorInputProps {
-    onGenerate: (mode: GenerationMode, aspectRatio: AspectRatio, prompt?: string, count?: number, vibe?: string, complexity?: string, speed?: string, duration?: number) => void;
+    onGenerate: (mode: GenerationMode, aspectRatio: AspectRatio, prompt?: string, count?: number, vibe?: string, complexity?: string, speed?: string, duration?: number, palette?: string, motionStyle?: string) => void;
     isLoading: boolean;
 }
 
@@ -18,13 +18,15 @@ export default function GeneratorInput({ onGenerate, isLoading }: GeneratorInput
     const [complexity, setComplexity] = useState('Medium');
     const [speed, setSpeed] = useState('Medium');
     const [duration, setDuration] = useState(10); // Default 10s loop
+    const [palette, setPalette] = useState<ColorPalette>('Auto');
+    const [motionStyle, setMotionStyle] = useState<MotionStyle>('Random');
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (mode === 'prompt' && prompt.trim()) {
-            onGenerate('prompt', aspectRatio, prompt.trim(), undefined, vibe, complexity, speed, duration);
+            onGenerate('prompt', aspectRatio, prompt.trim(), undefined, vibe, complexity, speed, duration, palette, motionStyle);
         } else if (mode === 'random') {
-            onGenerate('random', aspectRatio, undefined, count, vibe, complexity, speed, duration);
+            onGenerate('random', aspectRatio, undefined, count, vibe, complexity, speed, duration, palette, motionStyle);
         }
     };
 
@@ -33,6 +35,8 @@ export default function GeneratorInput({ onGenerate, isLoading }: GeneratorInput
     const complexityOptions = ['Minimalist', 'Medium', 'High', 'Insane'];
     const speedOptions = ['Slow', 'Medium', 'Fast', 'Hyper'];
     const durationOptions = [5, 10, 15, 30]; // Seconds
+    const paletteOptions: ColorPalette[] = ['Auto', 'Sunset', 'Ocean', 'Neon', 'Pastel', 'Monochrome', 'Fire', 'Forest'];
+    const motionStyleOptions: MotionStyle[] = ['Random', 'Flow', 'Rotate', 'Pulse', 'Morph', 'Glitch'];
 
     const ratioOptions: { value: AspectRatio; label: string; icon: string }[] = [
         { value: '16:9', label: 'Landscape', icon: 'monitor' },
@@ -216,6 +220,39 @@ export default function GeneratorInput({ onGenerate, isLoading }: GeneratorInput
                                     <span style={{ color: 'var(--accent)' }}>{speed}</span>
                                     <span>Fast</span>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Row 3: Color Palette & Motion Style */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                        <div className="control-group">
+                            <label className="section-label"><span className="material-symbols-outlined" style={{ fontSize: '14px', verticalAlign: 'middle', marginRight: '4px' }}>color_lens</span> Palette</label>
+                            <div className="custom-select-wrapper">
+                                <select
+                                    value={palette}
+                                    onChange={(e) => setPalette(e.target.value as ColorPalette)}
+                                    className="custom-select"
+                                    disabled={isLoading}
+                                >
+                                    {paletteOptions.map(p => <option key={p} value={p}>{p}</option>)}
+                                </select>
+                                <span className="material-symbols-outlined select-icon">expand_more</span>
+                            </div>
+                        </div>
+
+                        <div className="control-group">
+                            <label className="section-label"><span className="material-symbols-outlined" style={{ fontSize: '14px', verticalAlign: 'middle', marginRight: '4px' }}>animation</span> Motion</label>
+                            <div className="custom-select-wrapper">
+                                <select
+                                    value={motionStyle}
+                                    onChange={(e) => setMotionStyle(e.target.value as MotionStyle)}
+                                    className="custom-select"
+                                    disabled={isLoading}
+                                >
+                                    {motionStyleOptions.map(m => <option key={m} value={m}>{m}</option>)}
+                                </select>
+                                <span className="material-symbols-outlined select-icon">expand_more</span>
                             </div>
                         </div>
                     </div>
