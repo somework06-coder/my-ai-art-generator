@@ -5,8 +5,14 @@ import AuthButton from "./AuthButton"
 import CreditBalance from "./CreditBalance"
 
 export default async function Navbar() {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    let user = null;
+    try {
+        const supabase = await createClient()
+        const { data } = await supabase.auth.getUser()
+        user = data?.user;
+    } catch (error) {
+        console.error("Vercel Supabase SSR Error in Navbar:", error);
+    }
 
     return (
         <nav style={{
