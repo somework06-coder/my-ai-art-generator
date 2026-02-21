@@ -2,13 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js'; // Use admin client for callbacks
 import { Duitku } from '@/lib/duitku';
 
-// Need separate Admin Client to bypass RLS and update any user's credits
-const supabaseAdmin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
+// Initialize dynamically inside the handler to prevent Vercel Build-time crashes
+// when environment variables are not yet injected into the static compiler.
 export async function POST(request: NextRequest) {
+    const supabaseAdmin = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+        process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+    );
     try {
         // CONTENT-TYPE: application/x-www-form-urlencoded usually from Duitku
         const formData = await request.formData();
