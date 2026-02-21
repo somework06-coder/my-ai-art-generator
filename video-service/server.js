@@ -231,11 +231,13 @@ app.get('/download/:filename', (req, res) => {
         return res.status(404).send('File not found or already downloaded/deleted.');
     }
 
-    res.download(filePath, filename, (err) => {
+    const professionalFileName = `MotionStudio_Export_${filename}`;
+
+    res.download(filePath, professionalFileName, (err) => {
         if (err) {
-            console.error(`[Download Error] serving ${filename}:`, err);
+            console.error(`[Download Error] serving ${professionalFileName}:`, err);
         } else {
-            console.log(`[Download Streaming] Successfully streamed ${filename} to client. (File will self-destruct in 10 mins)`);
+            console.log(`[Download Streaming] Successfully streamed ${professionalFileName} to client. (File will self-destruct in 10 mins)`);
         }
     });
 });

@@ -114,8 +114,7 @@ function ArtItem({ shader, isLibrary, isSelected, onToggleSelect, onRemix }: {
                         // Download the remote URL
                         const a = document.createElement('a');
                         a.href = pollData.videoUrl;
-                        a.target = '_blank';
-                        a.download = `video-${Date.now()}.${pollData.format || format}`;
+                        a.download = `MotionStudio_Export_${Date.now()}.${pollData.format || format}`;
                         document.body.appendChild(a);
                         a.click();
                         document.body.removeChild(a);
