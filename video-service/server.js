@@ -181,8 +181,21 @@ async function processVideoExport(jobId, data) {
         const videoUrl = `${domain}/download/${fileName}`;
         console.log(`[Job ${jobId}] Proxy URL Ready: ${videoUrl}`);
 
-        // Clean up
+        // Clean up temporary rendering frames
         fs.rmSync(tempDir, { recursive: true, force: true });
+
+        // Auto-delete the final downloaded video file after 10 minutes (600,000 ms)
+        // to prevent Railway worker disk space from filling up
+        setTimeout(() => {
+            try {
+                if (fs.existsSync(finalOutputPath)) {
+                    fs.unlinkSync(finalOutputPath);
+                    console.log(`[Auto-Cleanup] Deleting ${fileName} from worker disk after 10 min hold.`);
+                }
+            } catch (err) {
+                console.error(`Failed delayed cleanup for ${fileName}:`, err);
+            }
+        }, 600000);
 
         return { success: true, videoUrl };
 
@@ -222,14 +235,7 @@ app.get('/download/:filename', (req, res) => {
         if (err) {
             console.error(`[Download Error] serving ${filename}:`, err);
         } else {
-            console.log(`[Auto-Cleanup] Download complete. Deleting ${filename} from worker disk.`);
-            try {
-                if (fs.existsSync(filePath)) {
-                    fs.unlinkSync(filePath);
-                }
-            } catch (unlinkErr) {
-                console.error(`Failed to delete ${filename}:`, unlinkErr);
-            }
+            console.log(`[Download Streaming] Successfully streamed ${filename} to client. (File will self-destruct in 10 mins)`);
         }
     });
 });
