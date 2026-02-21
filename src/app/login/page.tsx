@@ -3,8 +3,9 @@
 import { login, signup } from './actions'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
+import { Suspense } from 'react'
 
-export default function LoginPage() {
+function LoginForm() {
     const searchParams = useSearchParams()
     const message = searchParams.get('message') ?? undefined
     const error = searchParams.get('error') ?? undefined
@@ -227,5 +228,13 @@ export default function LoginPage() {
                 </div>
             </div>
         </div>
+    )
+}
+
+export default function LoginPage() {
+    return (
+        <Suspense fallback={<div style={{ minHeight: '100vh', background: '#050505' }} />}>
+            <LoginForm />
+        </Suspense>
     )
 }
