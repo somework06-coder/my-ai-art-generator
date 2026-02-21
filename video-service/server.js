@@ -288,7 +288,7 @@ if (connection) {
 
         return result;
 
-    }, { connection });
+    }, { connection, concurrency: 3 });
 
     worker.on('completed', (job) => {
         console.log(`[Queue] Job ${job.id} completed!`);
