@@ -10,7 +10,8 @@ const cors = require('cors');
 const { Worker } = require('bullmq');
 const { createClient } = require('@supabase/supabase-js');
 const Redis = require('ioredis');
-const puppeteer = require('puppeteer');
+const puppeteer = require('puppeteer-core');
+const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
 
 // Set FFmpeg path
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
@@ -41,6 +42,22 @@ if (redisUrl) {
     console.log(`✅ Connected to Redis at ${redisUrl}`);
 } else {
     console.warn("⚠️ REDIS_URL missing. Worker will not start.");
+}
+
+// R2 Storage Setup (S3 Client)
+let s3Client = null;
+if (process.env.R2_ENDPOINT && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY) {
+    s3Client = new S3Client({
+        region: "auto",
+        endpoint: process.env.R2_ENDPOINT,
+        credentials: {
+            accessKeyId: process.env.R2_ACCESS_KEY_ID,
+            secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+        }
+    });
+    console.log("✅ Connected to Cloudflare R2 S3 Object Storage.");
+} else {
+    console.warn("⚠️ Cloudflare R2 credentials missing. Videos will only be saved locally (volatile).");
 }
 
 function getResolution(aspectRatio, quality) {
@@ -169,17 +186,38 @@ async function processVideoExport(jobId, data) {
         }
 
         const fileName = `${jobId}.${format}`;
+        const professionalFileName = `MotionStudio_Export_${jobId}.${format}`;
         const finalOutputPath = path.join(publicExportsDir, fileName);
 
         fs.copyFileSync(output, finalOutputPath);
         console.log(`[Job ${jobId}] Saved locally to: ${finalOutputPath}`);
 
-        const domain = process.env.RAILWAY_PUBLIC_DOMAIN
-            ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
-            : `http://localhost:${PORT}`;
+        let videoUrl = '';
 
-        const videoUrl = `${domain}/download/${fileName}`;
-        console.log(`[Job ${jobId}] Proxy URL Ready: ${videoUrl}`);
+        if (s3Client && process.env.R2_BUCKET_NAME && process.env.R2_PUBLIC_URL) {
+            console.log(`[Job ${jobId}] Uploading to Cloudflare R2 S3...`);
+            const fileStream = fs.createReadStream(finalOutputPath);
+
+            await s3Client.send(new PutObjectCommand({
+                Bucket: process.env.R2_BUCKET_NAME,
+                Key: professionalFileName,
+                Body: fileStream,
+                ContentType: format === 'mp4' ? 'video/mp4' : 'video/quicktime',
+                // ACL is standard for public, but usually not needed if bucket is fully public 
+            }));
+
+            // Construct the final public URL
+            videoUrl = `${process.env.R2_PUBLIC_URL}/${professionalFileName}`;
+            console.log(`[Job ${jobId}] R2 Upload Success! Public URL: ${videoUrl}`);
+        } else {
+            // Fallback to local Railay proxy delivery
+            const domain = process.env.RAILWAY_PUBLIC_DOMAIN
+                ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+                : `http://localhost:${PORT}`;
+
+            videoUrl = `${domain}/download/${fileName}`;
+            console.log(`[Job ${jobId}] Proxy URL Ready: ${videoUrl}`);
+        }
 
         // Clean up temporary rendering frames
         fs.rmSync(tempDir, { recursive: true, force: true });
