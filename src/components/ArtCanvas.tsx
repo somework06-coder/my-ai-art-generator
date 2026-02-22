@@ -15,6 +15,7 @@ interface ArtCanvasProps {
 export interface ArtCanvasRef {
     recordVideo: (duration: number, onProgress?: (progress: number) => void) => Promise<{ blob: Blob; extension: string } | null>;
     getAspectRatio: () => AspectRatio;
+    toggleFullscreen: () => void;
 }
 
 const ArtCanvas = forwardRef<ArtCanvasRef, ArtCanvasProps>(({
@@ -33,7 +34,16 @@ const ArtCanvas = forwardRef<ArtCanvasRef, ArtCanvasProps>(({
             if (!rendererRef.current) return null;
             return rendererRef.current.recordVideo(duration, onProgress);
         },
-        getAspectRatio: () => aspectRef.current
+        getAspectRatio: () => aspectRef.current,
+        toggleFullscreen: () => {
+            const container = canvasRef.current?.parentElement;
+            if (!container) return;
+            if (document.fullscreenElement) {
+                document.exitFullscreen();
+            } else {
+                container.requestFullscreen().catch(() => { });
+            }
+        }
     }));
 
     // Initialize renderer
