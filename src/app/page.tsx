@@ -1,14 +1,31 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import GeneratorInput from '@/components/GeneratorInput';
 import ArtGrid from '@/components/ArtGrid';
 import { GeneratedShader, GenerationMode, AspectRatio } from '@/types';
+import { offlineStorage } from '@/lib/offlineStorage';
 
 export default function HomePage() {
   const [shaders, setShaders] = useState<GeneratedShader[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Load offline gallery on mount
+  useEffect(() => {
+    async function loadOfflineGallery() {
+      try {
+        const saved = await offlineStorage.getAllShaders();
+        if (saved && saved.length > 0) {
+          // Cast the cached types to GeneratedShader
+          setShaders(saved as unknown as GeneratedShader[]);
+        }
+      } catch (err) {
+        console.error('Failed to load offline gallery:', err);
+      }
+    }
+    loadOfflineGallery();
+  }, []);
 
   const handleGenerate = async (mode: GenerationMode, aspectRatio: AspectRatio, prompt?: string, count?: number, vibe?: string, complexity?: string, speed?: string, duration?: number) => {
     setIsLoading(true);
@@ -27,17 +44,47 @@ export default function HomePage() {
         throw new Error(data.error || 'Generation failed');
       }
 
-      // Add aspectRatio to each shader
+      // Add aspectRatio and createdAt to each shader
       const shadersWithRatio = data.shaders.map((s: GeneratedShader) => ({
         ...s,
-        aspectRatio
+        aspectRatio,
+        createdAt: Date.now()
       }));
 
-      setShaders(shadersWithRatio);
+      // Prepend to existing gallery
+      setShaders(prev => [...shadersWithRatio, ...prev]);
+
+      // Save to offline IndexedDB storage
+      try {
+        await Promise.all(shadersWithRatio.map((s: any) => offlineStorage.saveShader({
+          id: s.id,
+          title: s.title || 'Untitled',
+          fragmentCode: s.fragmentCode,
+          aspectRatio: s.aspectRatio,
+          prompt: s.prompt || prompt || 'Untitled',
+          createdAt: s.createdAt || Date.now(),
+          metadata: s.metadata
+        })));
+      } catch (dbError) {
+        console.error('Error saving to offline storage:', dbError);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate art');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Delete selected shaders from state + IndexedDB
+  const handleDelete = async (ids: string[]) => {
+    // Remove from React state
+    setShaders(prev => prev.filter(s => !ids.includes(s.id)));
+
+    // Remove from IndexedDB
+    try {
+      await Promise.all(ids.map(id => offlineStorage.deleteShader(id)));
+    } catch (err) {
+      console.error('Failed to delete from offline storage:', err);
     }
   };
 
@@ -69,7 +116,7 @@ export default function HomePage() {
 
         {/* Main Area - Art Grid */}
         <section className="art-section">
-          <ArtGrid shaders={shaders} />
+          <ArtGrid shaders={shaders} onDelete={handleDelete} />
         </section>
       </div>
     </main>

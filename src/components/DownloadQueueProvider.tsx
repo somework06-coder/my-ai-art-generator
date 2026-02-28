@@ -2,10 +2,12 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
+export type JobStatus = 'queued' | 'processing' | 'completed' | 'failed' | 'queued-offline';
+
 export type ExportJob = {
     jobId: string;
     artworkId: string;
-    status: 'pending' | 'processing' | 'completed' | 'failed';
+    status: JobStatus;
     progress?: number;
     statusText?: string;
     videoUrl?: string;
@@ -21,6 +23,7 @@ export type ExportJob = {
     crf?: number;
     duration?: number;
     fps?: number;
+    metadata?: import('@/types').StockMetadata;
 };
 
 type DownloadQueueContextType = {
@@ -38,7 +41,7 @@ export function DownloadQueueProvider({ children }: { children: React.ReactNode 
 
     useEffect(() => {
         const activeJobs = jobs.filter(j =>
-            (j.status === 'pending' || j.status === 'processing') &&
+            (j.status === 'queued' || j.status === 'processing') &&
             !j.jobId.startsWith('local-') &&
             !j.jobId.startsWith('bulk-')
         );
@@ -81,11 +84,32 @@ export function DownloadQueueProvider({ children }: { children: React.ReactNode 
         if (isProcessing) return;
 
         // Find the next pending local job in the queue
-        const nextJob = jobs.find(j => j.status === 'pending' && j.jobId.startsWith('local-'));
+        const nextJob = jobs.find(j => (j.status === 'queued' || j.status === 'queued-offline') && j.jobId.startsWith('local-'));
         if (!nextJob) return;
 
         // Prevent infinite loops by creating an inner async function
         const processJob = async () => {
+            // --- OFFLINE DETECTION & BACKGROUND SYNC ---
+            if (!navigator.onLine) {
+                setJobs(prev => prev.map(j => j.jobId === nextJob.jobId ? {
+                    ...j,
+                    status: 'queued-offline',
+                    statusText: 'Waiting for network...'
+                } : j));
+
+                // Try applying true SW Background Sync if supported (Chrome/Android)
+                if ('serviceWorker' in navigator && 'SyncManager' in window) {
+                    try {
+                        const registration = await navigator.serviceWorker.ready;
+                        await (registration as any).sync.register('export-video-sync');
+                        console.log('Background sync registered');
+                    } catch (err) {
+                        console.log('Background sync could not be registered', err);
+                    }
+                }
+                return;
+            }
+
             // Immediately mark as processing so the next effect tick doesn't pick it up again
             setJobs(prev => prev.map(j => j.jobId === nextJob.jobId ? { ...j, status: 'processing', statusText: `Rendering ${nextJob.quality}...` } : j));
 
@@ -109,7 +133,8 @@ export function DownloadQueueProvider({ children }: { children: React.ReactNode 
                         crf: nextJob.crf || 23,
                         duration: nextJob.duration || 10,
                         fps: nextJob.fps || 30,
-                        format: nextJob.format || 'mp4'
+                        format: nextJob.format || 'mp4',
+                        metadata: nextJob.metadata
                     })
                 });
 
@@ -145,6 +170,20 @@ export function DownloadQueueProvider({ children }: { children: React.ReactNode 
         processJob();
 
     }, [jobs]); // Trigger whenever jobs list changes
+
+    // --- FALLBACK SYNC LISTENER (For iOS / Safari without SyncManager) ---
+    useEffect(() => {
+        const handleOnline = () => {
+            // Resume any offline jobs
+            setJobs(prev => prev.map(j => (j.status === 'queued-offline') ? {
+                ...j,
+                status: 'queued',
+                statusText: 'Resuming...'
+            } : j));
+        };
+        window.addEventListener('online', handleOnline);
+        return () => window.removeEventListener('online', handleOnline);
+    }, []);
 
     const addJob = (job: ExportJob) => {
         setJobs(prev => [...prev, job]);

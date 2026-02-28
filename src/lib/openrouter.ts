@@ -288,6 +288,7 @@ export interface GeneratedShader {
     fragmentCode: string;
     timestamp: number;
     duration: number;
+    metadata?: import('@/types').StockMetadata;
 }
 
 // Generate shader from user prompt using Gemini API
@@ -370,13 +371,18 @@ export async function generateShaderFromPrompt(
             }
         };
 
-        const response = await fetch(`${GEMINI_BASE_URL}?key=${GEMINI_API_KEY}`, {
+        // Parallel AI Requests: Shader + Metadata
+        const shaderPromise = fetch(`${GEMINI_BASE_URL}?key=${GEMINI_API_KEY}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify(requestBody)
         });
+
+        const metadataPromise = generateStockMetadata(prompt, vibe, complexity);
+
+        const [response, metadata] = await Promise.all([shaderPromise, metadataPromise]);
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
@@ -395,7 +401,8 @@ export async function generateShaderFromPrompt(
             prompt,
             fragmentCode,
             timestamp: Date.now(),
-            duration
+            duration,
+            metadata: metadata || undefined
         };
     } catch (error) {
         console.error('Failed to generate shader (Gemini):', error);
@@ -688,4 +695,50 @@ function generateId(): string {
 function getRandomItems<T>(array: T[], count: number): T[] {
     const shuffled = [...array].sort(() => 0.5 - Math.random());
     return shuffled.slice(0, Math.min(count, array.length));
+}
+
+// Generate Stock Metadata for SEO
+async function generateStockMetadata(prompt: string, vibe: string, complexity: string): Promise<import('@/types').StockMetadata | null> {
+    try {
+        if (!GEMINI_API_KEY) return null;
+
+        const systemPrompt = `You are an expert SEO metadata generator for stock video sites (Shutterstock, Adobe Stock).
+Given a user's prompt, art style, and complexity, generate metadata for the resulting abstract generative art loop.
+The video will be an abstract, seamless looping animation.
+OUTPUT MUST BE VALID JSON ONLY with this exact schema:
+{
+    "title": "A catchy, descriptive title for stock sites (max 50 chars)",
+    "description": "A 1-2 sentence description suitable for stock sites. Focus on the abstract, seamless loop, and visual elements.",
+    "keywords": ["array", "of", "exact", "50", "keywords", "prioritizing", "abstract", "motion", "background", "loop"],
+    "category": "Backgrounds"
+}
+Do not include any markdown formatting or \`\`\`json block. Return raw JSON text only.`;
+
+        const requestBody = {
+            system_instruction: { parts: [{ text: systemPrompt }] },
+            contents: [{ role: 'user', parts: [{ text: `Prompt: ${prompt}\nVibe: ${vibe}\nComplexity: ${complexity}` }] }],
+            generationConfig: {
+                temperature: 0.7,
+                responseMimeType: "application/json",
+            }
+        };
+
+        const response = await fetch(`${GEMINI_BASE_URL}?key=${GEMINI_API_KEY}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody)
+        });
+
+        if (!response.ok) return null;
+
+        const data = await response.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+        // Clean up markdown just in case
+        const cleanText = text.replace(/```json\n/g, '').replace(/```\n?/g, '').trim();
+        return JSON.parse(cleanText);
+    } catch (e) {
+        console.error("Failed to generate stock metadata:", e);
+        return null;
+    }
 }

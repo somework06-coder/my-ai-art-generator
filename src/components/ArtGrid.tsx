@@ -8,12 +8,74 @@ import { useDownloadQueue } from './DownloadQueueProvider';
 
 interface ArtGridProps {
     shaders: GeneratedShader[];
+    onDelete?: (ids: string[]) => void;
 }
 
-export default function ArtGrid({ shaders }: ArtGridProps) {
+// -------------------------------------------------------------------------------- //
+// CSV Generator Helper
+// -------------------------------------------------------------------------------- //
+function downloadCSV(shaders: GeneratedShader[], format: string) {
+    let csvContent = "";
+
+    // Add BOM for UTF-8 Excel compatibility
+    const BOM = "\uFEFF";
+
+    if (format === 'Shutterstock') {
+        csvContent = BOM + "Filename,Description,Keywords,Categories\n";
+        shaders.forEach((s) => {
+            const m = s.metadata;
+            const filename = `${s.prompt.substring(0, 30).replace(/[^a-z0-9]/gi, '_').toLowerCase()}.mp4`;
+            const desc = m ? `"${m.description.replace(/"/g, '""')}"` : `""`;
+            const keywords = m ? `"${m.keywords.join(',').replace(/"/g, '""')}"` : `""`;
+            const category = m ? `"${m.category.replace(/"/g, '""')}"` : `""`;
+            csvContent += `${filename},${desc},${keywords},${category}\n`;
+        });
+    } else if (format === 'Adobe Stock') {
+        csvContent = BOM + "Filename,Title,Keywords,Category\n";
+        shaders.forEach((s) => {
+            const m = s.metadata;
+            const filename = `${s.prompt.substring(0, 30).replace(/[^a-z0-9]/gi, '_').toLowerCase()}.mp4`;
+            const title = m ? `"${m.title.replace(/"/g, '""')}"` : `""`;
+            const keywords = m ? `"${m.keywords.join(',').replace(/"/g, '""')}"` : `""`;
+            const category = m ? `"${m.category.replace(/"/g, '""')}"` : `""`;
+            csvContent += `${filename},${title},${keywords},${category}\n`;
+        });
+    } else { // Generic
+        csvContent = BOM + "Filename,Title,Description,Keywords\n";
+        shaders.forEach((s) => {
+            const m = s.metadata;
+            const filename = `${s.prompt.substring(0, 30).replace(/[^a-z0-9]/gi, '_').toLowerCase()}.mp4`;
+            const title = m ? `"${m.title.replace(/"/g, '""')}"` : `""`;
+            const desc = m ? `"${m.description.replace(/"/g, '""')}"` : `""`;
+            const keywords = m ? `"${m.keywords.join(',').replace(/"/g, '""')}"` : `""`;
+            csvContent += `${filename},${title},${desc},${keywords}\n`;
+        });
+    }
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `metadata_${format.replace(/\s+/g, '_').toLowerCase()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+export default function ArtGrid({ shaders, onDelete }: ArtGridProps) {
     const [selectionMode, setSelectionMode] = useState(false);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [exportShaders, setExportShaders] = useState<GeneratedShader[] | null>(null);
+    const [visibleCount, setVisibleCount] = useState(12);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+    // Reset visible count when new shaders are generated
+    useEffect(() => {
+        setVisibleCount(12);
+    }, [shaders.length]);
+
+    const visibleShaders = shaders.slice(0, visibleCount);
+    const hasMore = shaders.length > visibleCount;
 
     const toggleSelection = (id: string) => {
         const newSet = new Set(selectedIds);
@@ -45,12 +107,12 @@ export default function ArtGrid({ shaders }: ArtGridProps) {
                     }}
                     className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${selectionMode ? 'bg-[#E1B245] text-black' : 'bg-white/5 text-white/70 hover:bg-white/10'}`}
                 >
-                    {selectionMode ? 'Cancel Selection' : 'Select for Bulk Export'}
+                    {selectionMode ? 'Cancel' : 'Select'}
                 </button>
             </div>
 
-            <div className={`art-grid ${shaders.length === 1 ? 'single' : shaders.length === 2 ? 'double' : 'multi'}`}>
-                {shaders.map((shader) => (
+            <div className={`art-grid ${visibleShaders.length === 1 ? 'single' : visibleShaders.length === 2 ? 'double' : 'multi'}`}>
+                {visibleShaders.map((shader) => (
                     <ArtItem
                         key={shader.id}
                         shader={shader}
@@ -62,24 +124,89 @@ export default function ArtGrid({ shaders }: ArtGridProps) {
                 ))}
             </div>
 
+            {/* Load More Button */}
+            {hasMore && (
+                <div className="flex justify-center mt-6 mb-4">
+                    <button
+                        onClick={() => setVisibleCount(prev => prev + 12)}
+                        className="px-6 py-3 rounded-xl text-sm font-semibold text-white/80 bg-white/5 hover:bg-white/10 border border-white/10 transition-all flex items-center gap-2"
+                    >
+                        <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>expand_more</span>
+                        Load More ({shaders.length - visibleCount} remaining)
+                    </button>
+                </div>
+            )}
+
             {/* Bulk Action Bar */}
             {selectedIds.size > 0 && (
-                <div className="fixed bottom-0 left-0 right-0 bg-[#121212] border-t border-white/10 p-4 z-40 flex justify-between items-center shadow-[0_-10px_30px_rgba(0,0,0,0.5)] transform transition-transform translate-y-0 text-left" style={{ paddingLeft: 'max(16px, env(safe-area-inset-left))', paddingRight: 'max(16px, env(safe-area-inset-right))' }}>
+                <div className="fixed bottom-0 left-0 right-0 bg-[#121212] border-t border-white/10 p-4 z-40 shadow-[0_-10px_30px_rgba(0,0,0,0.5)]" style={{ paddingLeft: 'max(16px, env(safe-area-inset-left))', paddingRight: 'max(16px, env(safe-area-inset-right))' }}>
                     <div className="max-w-[1200px] mx-auto w-full flex justify-between items-center">
-                        <div className="text-white">
-                            <span className="text-[#E1B245] font-bold text-xl">{selectedIds.size}</span> artworks selected
+                        <div className="text-white text-sm">
+                            <span className="text-[#E1B245] font-bold text-lg">{selectedIds.size}</span> artwork{selectedIds.size > 1 ? 's' : ''} selected
                         </div>
-                        <button
-                            className="bg-[#E1B245] text-black px-6 py-3 rounded-lg font-bold flex items-center gap-2 hover:brightness-110 shadow-lg shadow-[#E1B245]/20 transition-all active:scale-95"
-                            onClick={() => {
-                                setExportShaders(shaders.filter(s => selectedIds.has(s.id)));
-                            }}
-                        >
-                            <span className="material-symbols-outlined">library_add_check</span>
-                            Bulk Export
-                        </button>
+                        <div className="flex gap-3">
+                            {/* Delete Button */}
+                            <button
+                                className="bg-red-500/10 text-red-400 border border-red-500/20 px-5 py-2.5 rounded-lg font-semibold text-sm flex items-center gap-2 hover:bg-red-500/20 transition-all active:scale-95"
+                                onClick={() => setShowDeleteConfirm(true)}
+                            >
+                                <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>delete</span>
+                                Delete
+                            </button>
+                            {/* Export Button */}
+                            <button
+                                className="bg-[#E1B245] text-black px-5 py-2.5 rounded-lg font-bold text-sm flex items-center gap-2 hover:brightness-110 shadow-lg shadow-[#E1B245]/20 transition-all active:scale-95"
+                                onClick={() => {
+                                    setExportShaders(shaders.filter(s => selectedIds.has(s.id)));
+                                }}
+                            >
+                                <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>movie</span>
+                                Export
+                            </button>
+                        </div>
                     </div>
                 </div>
+            )}
+
+            {/* Delete Confirmation Modal */}
+            {showDeleteConfirm && createPortal(
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center" onClick={() => setShowDeleteConfirm(false)}>
+                    <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+                    <div className="relative bg-[#1a1a1a] border border-white/10 rounded-2xl w-full max-w-sm mx-4 shadow-2xl" onClick={e => e.stopPropagation()}>
+                        <div className="p-6 text-center">
+                            <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mx-auto mb-4">
+                                <span className="material-symbols-outlined text-red-400 text-3xl">delete_forever</span>
+                            </div>
+                            <h3 className="text-lg font-bold text-white mb-2">Delete Artworks?</h3>
+                            <p className="text-sm text-white/60 mb-6 leading-relaxed">
+                                Are you sure you want to delete {selectedIds.size} selected artwork{selectedIds.size > 1 ? 's' : ''}? This will remove them from your gallery and offline storage. This action cannot be undone.
+                            </p>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setShowDeleteConfirm(false)}
+                                    className="flex-1 py-3 px-4 rounded-xl text-sm font-semibold text-white bg-white/5 hover:bg-white/10 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        if (onDelete) {
+                                            onDelete(Array.from(selectedIds));
+                                        }
+                                        setSelectedIds(new Set());
+                                        setSelectionMode(false);
+                                        setShowDeleteConfirm(false);
+                                    }}
+                                    className="flex-1 py-3 px-4 rounded-xl text-sm font-bold text-white bg-red-500 hover:bg-red-600 transition-all flex items-center justify-center gap-2"
+                                >
+                                    <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>delete</span>
+                                    Delete ({selectedIds.size})
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>,
+                document.body
             )}
             {/* Export Settings Modal - Handles single and bulk combinations */}
             {exportShaders && (
@@ -138,7 +265,7 @@ function ExportModal({ shaders, onClose }: { shaders: GeneratedShader[], onClose
                 : compression === 'Medium' ? 23
                     : 28;
 
-        // Dispatch a pending job to the persistent Download Queue for EACH shader
+        // Dispatch a queued job to the persistent Download Queue for EACH shader
         shaders.forEach((shader, index) => {
             const shaderDuration = shader.duration || 10;
             const estimatedTimeMs = baseTime * shaderDuration * (fps / 30) * crfMulti;
@@ -147,7 +274,7 @@ function ExportModal({ shaders, onClose }: { shaders: GeneratedShader[], onClose
             addJob({
                 jobId,
                 artworkId: shader.id,
-                status: 'pending',
+                status: 'queued',
                 format,
                 title: shader.prompt.substring(0, 30) + '...',
                 progress: 0,
@@ -159,7 +286,8 @@ function ExportModal({ shaders, onClose }: { shaders: GeneratedShader[], onClose
                 quality,
                 crf: crfValue,
                 duration: shaderDuration,
-                fps
+                fps,
+                metadata: shader.metadata
             });
         });
 
@@ -187,7 +315,7 @@ function ExportModal({ shaders, onClose }: { shaders: GeneratedShader[], onClose
                 )}
 
                 <div className="form-group" style={{ marginBottom: '16px' }}>
-                    <label className="section-label">Quality</label>
+                    <label className="section-label">Resolution</label>
                     <div className="custom-select-wrapper">
                         <select
                             value={quality}
@@ -203,7 +331,7 @@ function ExportModal({ shaders, onClose }: { shaders: GeneratedShader[], onClose
                 </div>
 
                 <div className="form-group" style={{ marginBottom: '16px' }}>
-                    <label className="section-label">Compression</label>
+                    <label className="section-label">Quality</label>
                     <div className="custom-select-wrapper">
                         <select
                             value={compression}
@@ -315,9 +443,10 @@ function ArtItem({
     const { jobs } = useDownloadQueue();
     const canvasRef = useRef<ArtCanvasRef | null>(null);
 
-    const activeJob = jobs.find(j => j.artworkId === shader.id && (j.status === 'pending' || j.status === 'processing'));
+    const activeJob = jobs.find(j => j.artworkId === shader.id && (j.status === 'queued' || j.status === 'processing'));
 
     const [justFinished, setJustFinished] = useState(false);
+    const [showMeta, setShowMeta] = useState(false);
     const prevActiveJobRef = useRef(activeJob);
 
     useEffect(() => {
@@ -361,12 +490,70 @@ function ArtItem({
                 )}
             </div>
 
-            <div className="art-item-info">
-                <p className="art-prompt">
-                    {shader.prompt.length > 60 ? shader.prompt.substring(0, 60) + '...' : shader.prompt}
-                </p>
-                <span className="art-ratio">{shader.aspectRatio}</span>
-                <span className="art-duration">{shader.duration || 10}s Loop</span>
+            <div className="art-item-info flex-col items-start gap-1">
+                <div className="flex justify-between w-full items-center">
+                    <p className="art-prompt truncate pr-2">
+                        {shader.prompt.length > 50 ? shader.prompt.substring(0, 50) + '...' : shader.prompt}
+                    </p>
+                    <div className="flex gap-2 shrink-0">
+                        <span className="art-ratio">{shader.aspectRatio}</span>
+                        <span className="art-duration">{shader.duration || 10}s Loop</span>
+                    </div>
+                </div>
+
+                {/* Metadata Panel Toggle */}
+                {shader.metadata && (
+                    <div className="w-full mt-2">
+                        <button
+                            onClick={() => setShowMeta(!showMeta)}
+                            className="text-xs flex items-center gap-1 text-[#E1B245] hover:text-white transition-colors"
+                        >
+                            <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>
+                                {showMeta ? 'expand_less' : 'expand_more'}
+                            </span>
+                            {showMeta ? 'Hide Metadata' : 'Show Stock Metadata'}
+                        </button>
+
+                        {showMeta && (
+                            <div className="mt-2 p-3 bg-black/40 rounded-lg border border-white/5 text-xs text-white/70 space-y-2">
+                                <div><strong className="text-white/90">Title:</strong> {shader.metadata.title}</div>
+                                <div><strong className="text-white/90">Desc:</strong> {shader.metadata.description}</div>
+                                <div><strong className="text-white/90">Cat:</strong> {shader.metadata.category}</div>
+
+                                <div className="pt-1">
+                                    <strong className="text-white/90 block mb-1">Keywords ({shader.metadata.keywords.length}):</strong>
+                                    <div className="flex flex-wrap gap-1">
+                                        {shader.metadata.keywords.slice(0, 10).map((k: string, i: number) => (
+                                            <span key={i} className="bg-white/10 px-1.5 py-0.5 rounded text-[10px]">{k}</span>
+                                        ))}
+                                        {shader.metadata.keywords.length > 10 && <span className="text-white/40">+{shader.metadata.keywords.length - 10} more</span>}
+                                    </div>
+                                </div>
+
+                                <div className="flex gap-2 pt-2 mt-2 border-t border-white/10">
+                                    <button
+                                        onClick={() => {
+                                            const txt = `${shader.metadata!.title}\n${shader.metadata!.description}\n\n${shader.metadata!.keywords.join(', ')}`;
+                                            navigator.clipboard.writeText(txt);
+                                            alert("Metadata copied!");
+                                        }}
+                                        className="flex-1 bg-white/10 hover:bg-white/20 py-1.5 rounded flex items-center justify-center gap-1 transition-colors text-white"
+                                    >
+                                        <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>content_copy</span>
+                                        Copy All
+                                    </button>
+                                    <button
+                                        onClick={() => downloadCSV([shader], 'Generic')}
+                                        className="flex-1 bg-[#E1B245]/20 hover:bg-[#E1B245]/30 text-[#E1B245] py-1.5 rounded flex items-center justify-center gap-1 transition-colors"
+                                    >
+                                        <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>download</span>
+                                        CSV
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
 
             <div className="art-item-actions">

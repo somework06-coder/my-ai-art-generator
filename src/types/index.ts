@@ -1,5 +1,12 @@
 // Types for AI Art Generator
 
+export interface StockMetadata {
+    title: string;
+    description: string;
+    keywords: string[];
+    category: string;
+}
+
 export interface GeneratedShader {
     id: string;
     prompt: string;
@@ -7,6 +14,7 @@ export interface GeneratedShader {
     timestamp: number;
     aspectRatio: AspectRatio;
     duration: number; // Native loop duration in seconds
+    metadata?: StockMetadata;
 }
 
 export type GenerationMode = 'prompt' | 'random';

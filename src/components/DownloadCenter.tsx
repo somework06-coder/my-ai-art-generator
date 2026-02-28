@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useDownloadQueue, ExportJob } from '@/components/DownloadQueueProvider';
+import type { StockMetadata } from '@/types';
 
 function JobProgress({ job }: { job: ExportJob }) {
     const [simulatedProgress, setSimulatedProgress] = useState(job.progress || 0);
@@ -61,12 +62,29 @@ function JobProgress({ job }: { job: ExportJob }) {
     );
 }
 
+// Generate CSV content for a single job's metadata
+function generateSingleCSV(metadata: StockMetadata, filename: string, format: string): string {
+    const BOM = "\uFEFF";
+    const esc = (s: string) => `"${s.replace(/"/g, '""')}"`;
+
+    if (format === 'Shutterstock') {
+        return BOM + "Filename,Description,Keywords,Categories\n" +
+            `${filename},${esc(metadata.description)},${esc(metadata.keywords.join(','))},${esc(metadata.category)}\n`;
+    } else if (format === 'Adobe Stock') {
+        return BOM + "Filename,Title,Keywords,Category\n" +
+            `${filename},${esc(metadata.title)},${esc(metadata.keywords.join(','))},${esc(metadata.category)}\n`;
+    } else {
+        return BOM + "Filename,Title,Description,Keywords\n" +
+            `${filename},${esc(metadata.title)},${esc(metadata.description)},${esc(metadata.keywords.join(','))}\n`;
+    }
+}
+
 export default function DownloadCenter() {
     const { jobs, clearCompleted } = useDownloadQueue();
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
-    const activeJobsCount = jobs.filter(j => j.status === 'pending' || j.status === 'processing').length;
+    const activeJobsCount = jobs.filter(j => j.status === 'queued' || j.status === 'queued-offline' || j.status === 'processing').length;
     const completedJobsCount = jobs.filter(j => j.status === 'completed').length;
     const badgeCount = activeJobsCount + completedJobsCount;
 
@@ -127,6 +145,23 @@ export default function DownloadCenter() {
     const [isSelectMode, setIsSelectMode] = useState(false);
     const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(new Set());
 
+    // Metadata toggle (persisted in localStorage)
+    const [includeMetadata, setIncludeMetadata] = useState(() => {
+        if (typeof window === 'undefined') return false;
+        return localStorage.getItem('metadataToggle') === 'true';
+    });
+    const [csvFormat, setCsvFormat] = useState(() => {
+        if (typeof window === 'undefined') return 'Shutterstock';
+        return localStorage.getItem('csvFormat') || 'Shutterstock';
+    });
+
+    useEffect(() => {
+        localStorage.setItem('metadataToggle', String(includeMetadata));
+    }, [includeMetadata]);
+    useEffect(() => {
+        localStorage.setItem('csvFormat', csvFormat);
+    }, [csvFormat]);
+
     useEffect(() => {
         if (!isOpen) {
             setIsSelectMode(false);
@@ -163,9 +198,15 @@ export default function DownloadCenter() {
             await Promise.all(itemsToZip.map(async (job, index) => {
                 const response = await fetch(job.videoUrl as string);
                 const blob = await response.blob();
-                // Add a short ID snippet to guarantee unique filenames within the ZIP
                 const safeName = `${job.title || 'Video'}_${job.jobId.slice(-4)}.${job.format || 'mp4'}`.replace(/[^a-z0-9_.-]/gi, '_');
                 zip.file(safeName, blob);
+
+                // Add individual metadata CSV if toggle is ON
+                if (includeMetadata && job.metadata) {
+                    const csvContent = generateSingleCSV(job.metadata, safeName, csvFormat);
+                    const csvName = safeName.replace(/\.[^.]+$/, '_metadata.csv');
+                    zip.file(csvName, csvContent);
+                }
             }));
 
             const content = await zip.generateAsync({ type: 'blob', compression: 'STORE' });
@@ -182,10 +223,40 @@ export default function DownloadCenter() {
         }
     };
 
-    const handleDownload = (videoUrl: string, title?: string, format?: string) => {
+    const handleDownload = async (job: ExportJob) => {
+        const videoUrl = job.videoUrl!;
+        const title = job.title || 'MotionStudio_Export';
+        const fmt = job.format || 'mp4';
+        const safeTitle = `${title}.${fmt}`.replace(/[^a-z0-9_.-]/gi, '_');
+
+        // If metadata toggle ON and this job has metadata → bundle into ZIP
+        if (includeMetadata && job.metadata) {
+            try {
+                const JSZip = (await import('jszip')).default;
+                const zip = new JSZip();
+
+                const response = await fetch(videoUrl);
+                const blob = await response.blob();
+                zip.file(safeTitle, blob);
+
+                const csvContent = generateSingleCSV(job.metadata, safeTitle, csvFormat);
+                const csvName = safeTitle.replace(/\.[^.]+$/, '_metadata.csv');
+                zip.file(csvName, csvContent);
+
+                const content = await zip.generateAsync({ type: 'blob', compression: 'STORE' });
+                const zipBlob = new Blob([content], { type: 'application/zip' });
+                const { saveAs } = await import('file-saver');
+                saveAs(zipBlob, safeTitle.replace(/\.[^.]+$/, '.zip'));
+                return;
+            } catch (e) {
+                console.error('Failed to create metadata ZIP:', e);
+            }
+        }
+
+        // Default: raw download
         const a = document.createElement('a');
         a.href = videoUrl;
-        a.download = `${title || 'MotionStudio_Export'}.${format || 'mp4'}`.replace(/[^a-z0-9_.-]/gi, '_');
+        a.download = safeTitle;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -279,6 +350,30 @@ export default function DownloadCenter() {
                             </div>
                         </div>
 
+                        {/* Metadata Toggle */}
+                        <div className="px-5 py-3 border-b border-white/5 bg-black/20 flex-shrink-0">
+                            <label className="flex items-center gap-2 cursor-pointer text-sm text-white/80">
+                                <input
+                                    type="checkbox"
+                                    checked={includeMetadata}
+                                    onChange={(e) => setIncludeMetadata(e.target.checked)}
+                                    style={{ accentColor: '#E1B245', width: '14px', height: '14px' }}
+                                />
+                                Include Metadata CSV
+                            </label>
+                            {includeMetadata && (
+                                <select
+                                    value={csvFormat}
+                                    onChange={(e) => setCsvFormat(e.target.value)}
+                                    className="mt-2 w-full bg-black/40 text-white/70 text-xs border border-white/10 rounded px-2 py-1.5"
+                                >
+                                    <option value="Shutterstock">Shutterstock Format</option>
+                                    <option value="Adobe Stock">Adobe Stock Format</option>
+                                    <option value="Generic">Generic Format</option>
+                                </select>
+                            )}
+                        </div>
+
                         <div className="flex-1 overflow-y-auto min-h-0 h-full w-full">
                             {jobs.length === 0 ? (
                                 <div className="p-10 text-center text-white/50 text-sm flex flex-col items-center justify-center h-full pt-32">
@@ -315,7 +410,7 @@ export default function DownloadCenter() {
                                                     <>
                                                         {job.status === 'completed' && job.videoUrl ? (
                                                             <button
-                                                                onClick={(e) => { e.stopPropagation(); handleDownload(job.videoUrl as string, job.title, job.format); }}
+                                                                onClick={(e) => { e.stopPropagation(); handleDownload(job); }}
                                                                 className="bg-[#E1B245] text-black w-8 h-8 rounded hover:brightness-110 flex-shrink-0 transition-transform active:scale-95 flex items-center justify-center shadow-lg shadow-[#E1B245]/20"
                                                                 title="Save to device"
                                                             >
@@ -330,7 +425,7 @@ export default function DownloadCenter() {
                                                 )}
                                             </div>
 
-                                            {(job.status === 'pending' || job.status === 'processing') && (
+                                            {(job.status === 'queued' || job.status === 'queued-offline' || job.status === 'processing') && (
                                                 <JobProgress job={job} />
                                             )}
                                         </li>

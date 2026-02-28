@@ -1,7 +1,6 @@
-
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { GenerationMode, AspectRatio } from '@/types';
 
 interface GeneratorInputProps {
@@ -18,6 +17,25 @@ export default function GeneratorInput({ onGenerate, isLoading }: GeneratorInput
     const [complexity, setComplexity] = useState('Medium');
     const [speed, setSpeed] = useState('Medium');
     const [duration, setDuration] = useState(10); // Default 10s loop
+
+    // Offline state handling
+    const [isOnline, setIsOnline] = useState(true);
+
+    useEffect(() => {
+        // Hydrate offline state
+        setIsOnline(navigator.onLine);
+
+        const handleOnline = () => setIsOnline(true);
+        const handleOffline = () => setIsOnline(false);
+
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+
+        return () => {
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
+        };
+    }, []);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -245,10 +263,16 @@ export default function GeneratorInput({ onGenerate, isLoading }: GeneratorInput
                 {/* Generate Button */}
                 <button
                     type="submit"
-                    className="generate-btn"
-                    disabled={isLoading || (mode === 'prompt' && !prompt.trim())}
+                    className={`generate-btn ${(!isOnline && !isLoading) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    disabled={isLoading || !isOnline || (mode === 'prompt' && !prompt.trim())}
+                    title={!isOnline ? "Connect to the internet to generate new art" : "Generate Art"}
                 >
-                    {isLoading ? (
+                    {!isOnline ? (
+                        <>
+                            <span className="material-symbols-outlined">wifi_off</span>
+                            Offline
+                        </>
+                    ) : isLoading ? (
                         <>
                             <span className="spinner"></span>
                             Generating...

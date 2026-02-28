@@ -37,6 +37,8 @@ export class ShaderRenderer {
     private startTime: number = 0;
     private canvas: HTMLCanvasElement | null = null;
     private currentFragmentCode: string = FALLBACK_FRAGMENT;
+    private _isPaused: boolean = false;
+    private pausedElapsed: number = 0;
 
     constructor() {
         this.scene = new THREE.Scene();
@@ -51,17 +53,23 @@ export class ShaderRenderer {
         };
     }
 
-    init(canvas: HTMLCanvasElement, aspectRatio: AspectRatio = '16:9'): void {
+    init(canvas: HTMLCanvasElement, aspectRatio: AspectRatio = '16:9', isPreview: boolean = true): void {
         this.canvas = canvas;
 
         this.renderer = new THREE.WebGLRenderer({
             canvas,
-            antialias: true,
+            antialias: false,   // Generative shaders don't benefit from AA
             alpha: false,
             preserveDrawingBuffer: true
         });
 
-        const { width, height } = this.getResolution(aspectRatio);
+        // Cap pixel ratio to 1 — prevents 4x overhead on Retina displays
+        this.renderer.setPixelRatio(1);
+
+        // Use lower resolution for preview grid, full res only for export
+        const { width, height } = isPreview
+            ? this.getPreviewResolution(aspectRatio)
+            : this.getResolution(aspectRatio);
         this.renderer.setSize(width, height);
         this.uniforms.uResolution.value.set(width, height);
 
@@ -139,7 +147,7 @@ export class ShaderRenderer {
     }
 
     private getResolution(aspectRatio: AspectRatio): { width: number; height: number } {
-        // Using 720p to avoid AVC level codec errors (max ~921600 pixels)
+        // Full resolution for export/recording (720p)
         switch (aspectRatio) {
             case '16:9':
                 return { width: 1280, height: 720 };
@@ -149,6 +157,20 @@ export class ShaderRenderer {
                 return { width: 720, height: 720 };
             default:
                 return { width: 1280, height: 720 };
+        }
+    }
+
+    private getPreviewResolution(aspectRatio: AspectRatio): { width: number; height: number } {
+        // Half resolution for gallery preview — 75% less GPU work per canvas
+        switch (aspectRatio) {
+            case '16:9':
+                return { width: 640, height: 360 };
+            case '9:16':
+                return { width: 360, height: 640 };
+            case '1:1':
+                return { width: 360, height: 360 };
+            default:
+                return { width: 640, height: 360 };
         }
     }
 
@@ -163,6 +185,29 @@ export class ShaderRenderer {
         }
     };
 
+    // --- PERFORMANCE: Pause/Resume lifecycle ---
+    pause(): void {
+        if (this._isPaused) return;
+        if (this.animationId !== null) {
+            cancelAnimationFrame(this.animationId);
+            this.animationId = null;
+        }
+        this.pausedElapsed = (performance.now() - this.startTime) / 1000;
+        this._isPaused = true;
+    }
+
+    resume(): void {
+        if (!this._isPaused) return;
+        this._isPaused = false;
+        // Adjust startTime so animation continues seamlessly from where it froze
+        this.startTime = performance.now() - (this.pausedElapsed * 1000);
+        this.animate();
+    }
+
+    get isPaused(): boolean {
+        return this._isPaused;
+    }
+
     updateAspectRatio(aspectRatio: AspectRatio): void {
         if (!this.renderer) return;
 
@@ -171,18 +216,7 @@ export class ShaderRenderer {
         this.uniforms.uResolution.value.set(width, height);
     }
 
-    pause(): void {
-        if (this.animationId !== null) {
-            cancelAnimationFrame(this.animationId);
-            this.animationId = null;
-        }
-    }
 
-    resume(): void {
-        if (this.animationId === null) {
-            this.animate();
-        }
-    }
 
     reset(): void {
         this.startTime = performance.now();

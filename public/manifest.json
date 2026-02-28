@@ -1,0 +1,28 @@
+{
+    "name": "Motion Studio — AI Generative Art",
+    "short_name": "Motion Studio",
+    "description": "Generate stunning abstract motion backgrounds with AI",
+    "start_url": "/",
+    "display": "standalone",
+    "theme_color": "#050505",
+    "background_color": "#050505",
+    "orientation": "any",
+    "icons": [
+        {
+            "src": "/icons/icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "/icons/icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        },
+        {
+            "src": "/icons/icon-maskable-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
+        }
+    ]
+}

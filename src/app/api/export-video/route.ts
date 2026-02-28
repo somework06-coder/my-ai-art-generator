@@ -18,6 +18,7 @@ interface ExportRequest {
     fps?: number;
     format?: 'mp4' | 'mov';
     crf?: number;
+    metadata?: import('@/types').StockMetadata;
 }
 
 function getResolution(aspectRatio: string, quality: string): { width: number; height: number } {
@@ -84,7 +85,7 @@ export async function POST(request: NextRequest) {
 
     try {
         const body: ExportRequest = await request.json();
-        const { shaderCode, aspectRatio = '16:9', quality = 'HD', duration = 5, fps = 30, format = 'mp4', crf: providedCrf } = body;
+        const { shaderCode, aspectRatio = '16:9', quality = 'HD', duration = 5, fps = 30, format = 'mp4', crf: providedCrf, metadata } = body;
 
         if (!shaderCode) {
             return NextResponse.json({ error: 'Shader code is required' }, { status: 400 });
@@ -183,6 +184,20 @@ export async function POST(request: NextRequest) {
             '-preset fast',
             '-movflags +faststart'
         ];
+
+        // Inject Stock Metadata if provided
+        if (metadata) {
+            if (metadata.title) {
+                ffmpegOutputOptions.push('-metadata', `title=${metadata.title.replace(/"/g, '')}`);
+            }
+            if (metadata.description || (metadata.keywords && metadata.keywords.length > 0)) {
+                let comment = '';
+                if (metadata.description) comment += metadata.description.replace(/"/g, '');
+                if (metadata.keywords) comment += ` - ${metadata.keywords.join(',')}`;
+                ffmpegOutputOptions.push('-metadata', `comment=${comment}`);
+                ffmpegOutputOptions.push('-metadata', `description=${comment}`);
+            }
+        }
         let vCodec = 'libx264';
 
         await new Promise<void>((resolve, reject) => {

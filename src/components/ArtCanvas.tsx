@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
+import { useEffect, useRef, forwardRef, useImperativeHandle, useState } from 'react';
 import { ShaderRenderer } from '@/lib/shaderRenderer';
 import { AspectRatio } from '@/types';
 
@@ -26,8 +26,10 @@ const ArtCanvas = forwardRef<ArtCanvasRef, ArtCanvasProps>(({
     showLabel
 }, ref) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
     const rendererRef = useRef<ShaderRenderer | null>(null);
     const aspectRef = useRef<AspectRatio>(aspectRatio);
+    const [isVisible, setIsVisible] = useState(false);
 
     useImperativeHandle(ref, () => ({
         recordVideo: async (duration: number, onProgress?: (progress: number) => void) => {
@@ -46,29 +48,66 @@ const ArtCanvas = forwardRef<ArtCanvasRef, ArtCanvasProps>(({
         }
     }));
 
-    // Initialize renderer
+    // --- PERF: True WebGL Virtualization ---
+    // Only maintain WebGL contexts for canvases near the viewport (browsers hard limit contexts to ~16)
     useEffect(() => {
+        if (!containerRef.current) return;
+
+        const observer = new IntersectionObserver(
+            ([entry]) => {
+                setIsVisible(entry.isIntersecting);
+            },
+            { threshold: 0, rootMargin: '300px' } // Pre-warm 300px before entering viewport
+        );
+        observer.observe(containerRef.current);
+
+        return () => observer.disconnect();
+    }, []);
+
+    // Initialize/Dispose renderer based on visibility
+    useEffect(() => {
+        if (!isVisible) {
+            // Aggressive teardown: delete WebGL context to free up browser slots
+            if (rendererRef.current) {
+                rendererRef.current.dispose();
+                rendererRef.current = null;
+            }
+            return;
+        }
+
+        // We are visible (or near it), create the context
         if (!canvasRef.current) return;
 
         rendererRef.current = new ShaderRenderer();
         rendererRef.current.init(canvasRef.current, aspectRatio);
         aspectRef.current = aspectRatio;
 
-        return () => {
-            rendererRef.current?.dispose();
-            rendererRef.current = null;
-        };
-    }, [aspectRatio]);
-
-    // Load shader when code changes
-    useEffect(() => {
-        if (!rendererRef.current || !shaderCode) return;
-
-        const result = rendererRef.current.loadShader(shaderCode);
-        if (!result.success) {
-            console.error('Shader error:', result.error);
+        // Load the actual shader if we have it
+        if (shaderCode) {
+            rendererRef.current.loadShader(shaderCode);
         }
-    }, [shaderCode]);
+
+        // --- PERF: Pause shader when browser tab is hidden ---
+        const handleVisibilityChange = () => {
+            if (!rendererRef.current) return;
+            if (document.hidden) {
+                rendererRef.current.pause();
+            } else {
+                rendererRef.current.resume();
+            }
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            if (rendererRef.current) {
+                rendererRef.current.dispose();
+                rendererRef.current = null;
+            }
+        };
+    }, [isVisible, aspectRatio, shaderCode]); // Include shaderCode so we can load it on true mount
+
+    // Remove the separate loadShader effect as it's now handled by the visibility effect directly
 
     // Get aspect ratio class
     const getAspectClass = () => {
@@ -81,10 +120,15 @@ const ArtCanvas = forwardRef<ArtCanvasRef, ArtCanvasProps>(({
 
     return (
         <div
+            ref={containerRef}
             className={`art-canvas-container ${getAspectClass()} ${isSelected ? 'selected' : ''} ${onClick ? 'clickable' : ''}`}
             onClick={onClick}
         >
-            <canvas ref={canvasRef} className="art-canvas" />
+            {isVisible ? (
+                <canvas ref={canvasRef} className="art-canvas fade-in" />
+            ) : (
+                <div className="art-canvas placeholder-bg" />
+            )}
             {showLabel && (
                 <div className="art-label">{showLabel}</div>
             )}
