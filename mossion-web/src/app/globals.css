@@ -1,0 +1,23 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-gold: #E1B245;
+  --color-brand-gold-hover: #F2C96C;
+  --font-sans: var(--font-inter);
+}
+
+/* Custom utilities */
+@layer utilities {
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-[#F2C96C] to-[#D4A017];
+  }
+
+  .glass-card {
+    @apply bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl;
+  }
+}
+
+body {
+  background-color: #050505;
+  color: #ffffff;
+}
