@@ -9,6 +9,7 @@ import { useDownloadQueue } from './DownloadQueueProvider';
 interface ArtGridProps {
     shaders: GeneratedShader[];
     onDelete?: (ids: string[]) => void;
+    onFixShader?: (shaderId: string, fallbackCode: string, metadata: any, prompt: string) => void;
 }
 
 // -------------------------------------------------------------------------------- //
@@ -62,7 +63,7 @@ function downloadCSV(shaders: GeneratedShader[], format: string) {
     document.body.removeChild(link);
 }
 
-export default function ArtGrid({ shaders, onDelete }: ArtGridProps) {
+export default function ArtGrid({ shaders, onDelete, onFixShader }: ArtGridProps) {
     const [selectionMode, setSelectionMode] = useState(false);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [exportShaders, setExportShaders] = useState<GeneratedShader[] | null>(null);
@@ -71,6 +72,7 @@ export default function ArtGrid({ shaders, onDelete }: ArtGridProps) {
 
     // Reset visible count when new shaders are generated
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setVisibleCount(12);
     }, [shaders.length]);
 
@@ -99,15 +101,29 @@ export default function ArtGrid({ shaders, onDelete }: ArtGridProps) {
 
     return (
         <div style={{ paddingBottom: selectedIds.size > 0 ? '80px' : '0' }}>
-            <div className="flex justify-end mb-4 px-4">
+            <div className="flex justify-end mb-4 px-4 gap-3">
+                {selectionMode && (
+                    <button
+                        onClick={() => {
+                            if (selectedIds.size === shaders.length) {
+                                setSelectedIds(new Set());
+                            } else {
+                                setSelectedIds(new Set(shaders.map(s => s.id)));
+                            }
+                        }}
+                        className="px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-white/5 text-white/70 hover:bg-white/10 border border-white/5"
+                    >
+                        {selectedIds.size === shaders.length ? 'Deselect All' : 'Select All'}
+                    </button>
+                )}
                 <button
                     onClick={() => {
                         setSelectionMode(!selectionMode);
                         if (selectionMode) setSelectedIds(new Set()); // Clear when disabling
                     }}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${selectionMode ? 'bg-[#E1B245] text-black' : 'bg-white/5 text-white/70 hover:bg-white/10'}`}
+                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors shadow-sm ${selectionMode ? 'bg-white/10 text-white/80 hover:bg-white/15 border border-white/10' : 'bg-[#E1B245] text-black hover:bg-[#F2C94C]'}`}
                 >
-                    {selectionMode ? 'Cancel' : 'Select'}
+                    {selectionMode ? 'Cancel Selection' : 'Select'}
                 </button>
             </div>
 
@@ -120,6 +136,12 @@ export default function ArtGrid({ shaders, onDelete }: ArtGridProps) {
                         isSelected={selectedIds.has(shader.id)}
                         onToggleSelect={() => toggleSelection(shader.id)}
                         onExportSingle={(shader) => setExportShaders([shader])}
+                        onFixShader={onFixShader}
+                        onDeleteSingle={() => {
+                            if (window.confirm('Delete this artwork permanently?')) {
+                                onDelete?.([shader.id]);
+                            }
+                        }}
                     />
                 ))}
             </div>
@@ -432,13 +454,17 @@ function ArtItem({
     selectionMode,
     isSelected,
     onToggleSelect,
-    onExportSingle
+    onExportSingle,
+    onFixShader,
+    onDeleteSingle
 }: {
     shader: GeneratedShader,
     selectionMode?: boolean,
     isSelected?: boolean,
     onToggleSelect?: () => void,
-    onExportSingle: (shader: GeneratedShader) => void
+    onExportSingle: (shader: GeneratedShader) => void,
+    onFixShader?: (shaderId: string, fallbackCode: string, metadata: any, prompt: string) => void,
+    onDeleteSingle?: () => void
 }) {
     const { jobs } = useDownloadQueue();
     const canvasRef = useRef<ArtCanvasRef | null>(null);
@@ -454,6 +480,7 @@ function ArtItem({
             // Job finished or failed
             const latestJob = jobs.slice().reverse().find(j => j.artworkId === shader.id);
             if (latestJob?.status === 'completed') {
+                // eslint-disable-next-line react-hooks/set-state-in-effect
                 setJustFinished(true);
                 const timer = setTimeout(() => setJustFinished(false), 3000);
                 return () => clearTimeout(timer);
@@ -471,6 +498,9 @@ function ArtItem({
                     ref={canvasRef}
                     shaderCode={shader.fragmentCode}
                     aspectRatio={shader.aspectRatio}
+                    onFixShader={(fallbackCode, metadata, prompt) => {
+                        onFixShader?.(shader.id, fallbackCode, metadata, prompt);
+                    }}
                 />
 
                 {/* Selection Overlay */}
@@ -492,7 +522,7 @@ function ArtItem({
 
             <div className="art-item-info flex-col items-start gap-1">
                 <div className="flex justify-between w-full items-center">
-                    <p className="art-prompt truncate pr-2">
+                    <p className="art-prompt truncate pr-2" title={shader.prompt}>
                         {shader.prompt.length > 50 ? shader.prompt.substring(0, 50) + '...' : shader.prompt}
                     </p>
                     <div className="flex gap-2 shrink-0">
@@ -500,6 +530,19 @@ function ArtItem({
                         <span className="art-duration">{shader.duration || 10}s Loop</span>
                     </div>
                 </div>
+                {shader.createdAt && (
+                    <div className="text-[10px] text-white/40 mt-1 flex items-center gap-1">
+                        <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>schedule</span>
+                        {new Intl.DateTimeFormat('id-ID', {
+                            weekday: 'long',
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        }).format(new Date(shader.createdAt))}
+                    </div>
+                )}
 
                 {/* Metadata Panel Toggle */}
                 {shader.metadata && (
@@ -593,6 +636,35 @@ function ArtItem({
                             </>
                         )}
                     </button>
+                    {onDeleteSingle && !selectionMode && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); onDeleteSingle(); }}
+                            style={{
+                                width: '40px',
+                                flexShrink: 0,
+                                background: 'rgba(239, 68, 68, 0.1)',
+                                border: '1px solid rgba(239, 68, 68, 0.2)',
+                                borderRadius: '8px',
+                                color: '#ef4444',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s'
+                            }}
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)';
+                                e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.4)';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
+                                e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.2)';
+                            }}
+                            title="Delete Artwork"
+                        >
+                            <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>delete</span>
+                        </button>
+                    )}
                 </div>
             </div>
         </div>

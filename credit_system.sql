@@ -1,7 +1,7 @@
 -- 1. Add 'credits' column to 'profiles' table
--- Default 3 credits for new users (Free Trial)
+-- Default 50 credits for new users
 ALTER TABLE public.profiles 
-ADD COLUMN IF NOT EXISTS credits INTEGER DEFAULT 3 NOT NULL;
+ADD COLUMN IF NOT EXISTS credits INTEGER DEFAULT 50 NOT NULL;
 
 -- 2. Create 'credit_transactions' table to track usage history
 CREATE TABLE IF NOT EXISTS public.credit_transactions (

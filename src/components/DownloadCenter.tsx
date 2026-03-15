@@ -3,6 +3,8 @@ import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useDownloadQueue, ExportJob } from '@/components/DownloadQueueProvider';
 import type { StockMetadata } from '@/types';
+import { save, message } from '@tauri-apps/plugin-dialog';
+import { writeFile, readFile } from '@tauri-apps/plugin-fs';
 
 function JobProgress({ job }: { job: ExportJob }) {
     const [simulatedProgress, setSimulatedProgress] = useState(job.progress || 0);
@@ -11,6 +13,7 @@ function JobProgress({ job }: { job: ExportJob }) {
     useEffect(() => {
         // Only run simulation if it's processing and has tracking fields
         if (job.status !== 'processing' || !job.startTimeMs || !job.estimatedTimeMs) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setSimulatedProgress(job.progress || 0);
             setTimeRemaining(null);
             return;
@@ -62,25 +65,28 @@ function JobProgress({ job }: { job: ExportJob }) {
     );
 }
 
-// Generate CSV content for a single job's metadata
-function generateSingleCSV(metadata: StockMetadata, filename: string, format: string): string {
+// Generate CSV content for multiple jobs' metadata
+function generateConsolidatedCSV(entries: { metadata: StockMetadata, filename: string }[], format: string): string {
     const BOM = "\uFEFF";
     const esc = (s: string) => `"${s.replace(/"/g, '""')}"`;
 
     if (format === 'Shutterstock') {
-        return BOM + "Filename,Description,Keywords,Categories\n" +
-            `${filename},${esc(metadata.description)},${esc(metadata.keywords.join(','))},${esc(metadata.category)}\n`;
+        const header = "Filename,Description,Keywords,Categories\n";
+        const rows = entries.map(e => `${e.filename},${esc(e.metadata.description)},${esc(e.metadata.keywords.join(','))},${esc(e.metadata.category)}\n`);
+        return BOM + header + rows.join('');
     } else if (format === 'Adobe Stock') {
-        return BOM + "Filename,Title,Keywords,Category\n" +
-            `${filename},${esc(metadata.title)},${esc(metadata.keywords.join(','))},${esc(metadata.category)}\n`;
+        const header = "Filename,Title,Keywords,Category\n";
+        const rows = entries.map(e => `${e.filename},${esc(e.metadata.title)},${esc(e.metadata.keywords.join(','))},${esc(e.metadata.category)}\n`);
+        return BOM + header + rows.join('');
     } else {
-        return BOM + "Filename,Title,Description,Keywords\n" +
-            `${filename},${esc(metadata.title)},${esc(metadata.description)},${esc(metadata.keywords.join(','))}\n`;
+        const header = "Filename,Title,Description,Keywords\n";
+        const rows = entries.map(e => `${e.filename},${esc(e.metadata.title)},${esc(e.metadata.description)},${esc(e.metadata.keywords.join(','))}\n`);
+        return BOM + header + rows.join('');
     }
 }
 
 export default function DownloadCenter() {
-    const { jobs, clearCompleted } = useDownloadQueue();
+    const { jobs, clearCompleted, autoClearOnClose, setAutoClearOnClose } = useDownloadQueue();
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -142,6 +148,7 @@ export default function DownloadCenter() {
 
     const [isZipping, setIsZipping] = useState(false);
     const [showConfirmPopup, setShowConfirmPopup] = useState(false);
+    const [showClearConfirm, setShowClearConfirm] = useState(false);
     const [isSelectMode, setIsSelectMode] = useState(false);
     const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(new Set());
 
@@ -167,6 +174,7 @@ export default function DownloadCenter() {
             setIsSelectMode(false);
             setSelectedJobIds(new Set());
             setShowConfirmPopup(false);
+            setShowClearConfirm(false);
         }
     }, [isOpen]);
 
@@ -186,6 +194,25 @@ export default function DownloadCenter() {
         }
     };
 
+    const getDimensionString = (job: ExportJob) => {
+        let baseW = 1280;
+        let baseH = 720;
+        const q = job.quality || 'HD';
+        const ar = job.aspectRatio || '16:9';
+
+        if (q === 'FHD' || q === '1080p') {
+            baseW = 1920;
+            baseH = 1080;
+        } else if (q === '4K') {
+            baseW = 3840;
+            baseH = 2160;
+        }
+
+        if (ar === '9:16') return `${baseH}x${baseW}`;
+        if (ar === '1:1') return `${baseH}x${baseH}`;
+        return `${baseW}x${baseH}`;
+    };
+
     const handleDownloadAllZip = async () => {
         if (isZipping) return;
         setIsZipping(true);
@@ -195,38 +222,65 @@ export default function DownloadCenter() {
             const zip = new JSZip();
             const itemsToZip = jobs.filter(j => selectedJobIds.has(j.jobId) && j.status === 'completed' && j.videoUrl);
 
-            await Promise.all(itemsToZip.map(async (job, index) => {
-                const response = await fetch(job.videoUrl as string);
-                const blob = await response.blob();
-                const safeName = `${job.title || 'Video'}_${job.jobId.slice(-4)}.${job.format || 'mp4'}`.replace(/[^a-z0-9_.-]/gi, '_');
-                zip.file(safeName, blob);
+            const metadataEntries: { metadata: StockMetadata; filename: string }[] = [];
 
-                // Add individual metadata CSV if toggle is ON
+            await Promise.all(itemsToZip.map(async (job) => {
+                // job.videoUrl is now a local file path
+                const fileBytes = await readFile(job.videoUrl as string);
+
+                // Add dimensions mapping e.g., Title_1920x1080_e4d2.mp4
+                const safeName = `${job.title || 'Video'}_${job.jobId.slice(-4)}.${job.format || 'mp4'}`.replace(/[^a-z0-9_.-]/gi, '_');
+
+                zip.file(safeName, fileBytes);
+
+                // Collect metadata for consolidated CSV if toggle is ON
                 if (includeMetadata && job.metadata) {
-                    const csvContent = generateSingleCSV(job.metadata, safeName, csvFormat);
-                    const csvName = safeName.replace(/\.[^.]+$/, '_metadata.csv');
-                    zip.file(csvName, csvContent);
+                    metadataEntries.push({ metadata: job.metadata, filename: safeName });
                 }
             }));
 
-            const content = await zip.generateAsync({ type: 'blob', compression: 'STORE' });
-            const zipBlob = new Blob([content], { type: 'application/zip' });
-            const { saveAs } = await import('file-saver');
-            saveAs(zipBlob, `MotionStudio_Exports_${Date.now()}.zip`);
+            // Add single consolidated CSV after all videos
+            if (metadataEntries.length > 0) {
+                const csvContent = generateConsolidatedCSV(metadataEntries, csvFormat);
+                zip.file('Mossion_metadata.csv', csvContent);
+            }
 
-            setShowConfirmPopup(false);
+            const content = await zip.generateAsync({ type: 'uint8array', compression: 'STORE' });
+
+            const filePath = await save({
+                filters: [{
+                    name: 'ZIP Archive',
+                    extensions: ['zip']
+                }],
+                defaultPath: `Mossion_Exports_${Date.now()}.zip`
+            });
+
+            if (filePath) {
+                await writeFile(filePath, content);
+                setShowConfirmPopup(false);
+                setIsOpen(false);
+
+                await message(`Successfully downloaded to:\n${filePath}`, {
+                    title: 'Download Complete',
+                    kind: 'info'
+                });
+            } else {
+                setShowConfirmPopup(false);
+            }
         } catch (error) {
             console.error('Failed to create ZIP:', error);
-            alert('Failed to generate ZIP file.');
+            await message('Failed to generate ZIP file.', { title: 'Error', kind: 'error' });
+            setShowConfirmPopup(false);
         } finally {
             setIsZipping(false);
         }
     };
 
     const handleDownload = async (job: ExportJob) => {
-        const videoUrl = job.videoUrl!;
-        const title = job.title || 'MotionStudio_Export';
+        const videoLocalPath = job.videoUrl!;
+        const title = job.title || 'Mossion_Export';
         const fmt = job.format || 'mp4';
+
         const safeTitle = `${title}.${fmt}`.replace(/[^a-z0-9_.-]/gi, '_');
 
         // If metadata toggle ON and this job has metadata → bundle into ZIP
@@ -235,31 +289,57 @@ export default function DownloadCenter() {
                 const JSZip = (await import('jszip')).default;
                 const zip = new JSZip();
 
-                const response = await fetch(videoUrl);
-                const blob = await response.blob();
-                zip.file(safeTitle, blob);
+                const fileBytes = await readFile(videoLocalPath);
+                zip.file(safeTitle, fileBytes);
 
-                const csvContent = generateSingleCSV(job.metadata, safeTitle, csvFormat);
+                const csvContent = generateConsolidatedCSV([{ metadata: job.metadata, filename: safeTitle }], csvFormat);
                 const csvName = safeTitle.replace(/\.[^.]+$/, '_metadata.csv');
                 zip.file(csvName, csvContent);
 
-                const content = await zip.generateAsync({ type: 'blob', compression: 'STORE' });
-                const zipBlob = new Blob([content], { type: 'application/zip' });
-                const { saveAs } = await import('file-saver');
-                saveAs(zipBlob, safeTitle.replace(/\.[^.]+$/, '.zip'));
+                const content = await zip.generateAsync({ type: 'uint8array', compression: 'STORE' });
+
+                const filePath = await save({
+                    filters: [{ name: 'ZIP Archive', extensions: ['zip'] }],
+                    defaultPath: safeTitle.replace(/\.[^.]+$/, '.zip')
+                });
+
+                if (filePath) {
+                    await writeFile(filePath, content);
+                    setIsOpen(false);
+
+                    await message(`Successfully downloaded to:\n${filePath}`, {
+                        title: 'Download Complete',
+                        kind: 'info'
+                    });
+                }
                 return;
             } catch (e) {
                 console.error('Failed to create metadata ZIP:', e);
+                await message('Failed to generate ZIP file.', { title: 'Error', kind: 'error' });
             }
         }
 
-        // Default: raw download
-        const a = document.createElement('a');
-        a.href = videoUrl;
-        a.download = safeTitle;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+        // Default: raw download (copy from temp path to user chosen path)
+        try {
+            const filePath = await save({
+                filters: [{ name: 'Video', extensions: [fmt] }],
+                defaultPath: safeTitle
+            });
+
+            if (filePath) {
+                const fileBytes = await readFile(videoLocalPath);
+                await writeFile(filePath, fileBytes);
+                setIsOpen(false);
+
+                await message(`Successfully downloaded to:\n${filePath}`, {
+                    title: 'Download Complete',
+                    kind: 'info'
+                });
+            }
+        } catch (e) {
+            console.error('Failed to save file:', e);
+            await message('Failed to save video file.', { title: 'Error', kind: 'error' });
+        }
     };
 
     return (
@@ -331,14 +411,14 @@ export default function DownloadCenter() {
                                         {completedJobsCount > 1 && (
                                             <button
                                                 onClick={() => setIsSelectMode(true)}
-                                                className="text-xs border border-white/20 text-white px-3 py-1.5 rounded hover:bg-white/5 transition-colors flex items-center gap-1"
+                                                className="text-xs font-medium bg-[#E1B245] text-black border border-transparent px-3 py-1.5 rounded hover:bg-[#F2C94C] transition-colors flex items-center gap-1 shadow-sm"
                                             >
                                                 <span className="material-symbols-outlined text-[14px]">checklist</span>
                                                 Select
                                             </button>
                                         )}
                                         {jobs.length > 0 && (
-                                            <button onClick={clearCompleted} className="text-xs text-white/50 hover:text-white transition-colors ml-2">
+                                            <button onClick={() => setShowClearConfirm(true)} className="text-xs text-white/50 hover:text-white transition-colors ml-2">
                                                 Clear
                                             </button>
                                         )}
@@ -350,22 +430,39 @@ export default function DownloadCenter() {
                             </div>
                         </div>
 
-                        {/* Metadata Toggle */}
-                        <div className="px-5 py-3 border-b border-white/5 bg-black/20 flex-shrink-0">
-                            <label className="flex items-center gap-2 cursor-pointer text-sm text-white/80">
+                        {/* Options Toggles */}
+                        <div className="px-5 py-3 border-b border-white/5 bg-black/20 flex-shrink-0 flex flex-col gap-3">
+                            <label className="flex items-center justify-between cursor-pointer group">
+                                <span className="text-sm text-white/80 group-hover:text-white transition-colors">Auto-Clear Queue on Close</span>
+                                <div className={`w-8 h-4 rounded-full transition-colors duration-300 relative ${autoClearOnClose ? 'bg-[#E1B245]' : 'bg-white/20'}`}>
+                                    <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-black transition-all duration-300 ${autoClearOnClose ? 'left-[18px]' : 'left-1'}`} />
+                                </div>
                                 <input
                                     type="checkbox"
+                                    className="hidden"
+                                    checked={autoClearOnClose}
+                                    onChange={(e) => setAutoClearOnClose(e.target.checked)}
+                                />
+                            </label>
+
+                            <label className="flex items-center justify-between cursor-pointer group">
+                                <span className="text-sm text-white/80 group-hover:text-white transition-colors">Include Metadata CSV File</span>
+                                <div className={`w-8 h-4 rounded-full transition-colors duration-300 relative ${includeMetadata ? 'bg-[#E1B245]' : 'bg-white/20'}`}>
+                                    <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-black transition-all duration-300 ${includeMetadata ? 'left-[18px]' : 'left-1'}`} />
+                                </div>
+                                <input
+                                    type="checkbox"
+                                    className="hidden"
                                     checked={includeMetadata}
                                     onChange={(e) => setIncludeMetadata(e.target.checked)}
-                                    style={{ accentColor: '#E1B245', width: '14px', height: '14px' }}
                                 />
-                                Include Metadata CSV
                             </label>
+
                             {includeMetadata && (
                                 <select
                                     value={csvFormat}
                                     onChange={(e) => setCsvFormat(e.target.value)}
-                                    className="mt-2 w-full bg-black/40 text-white/70 text-xs border border-white/10 rounded px-2 py-1.5"
+                                    className="mt-1 w-full bg-black/40 text-white/70 text-xs border border-white/10 rounded px-2 py-1.5 focus:outline-none focus:border-[#E1B245]/50 transition-colors cursor-pointer"
                                 >
                                     <option value="Shutterstock">Shutterstock Format</option>
                                     <option value="Adobe Stock">Adobe Stock Format</option>
@@ -403,7 +500,36 @@ export default function DownloadCenter() {
                                                 )}
                                                 <div className="flex-1 pr-4 min-w-0">
                                                     <p className="text-sm font-medium text-white truncate" title={job.title}>{job.title || 'Untitled Video'}</p>
-                                                    <p className="text-xs text-white/50 uppercase mt-0.5">{job.format || 'MP4'}</p>
+                                                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-white/10 text-white/70 uppercase border border-white/5">
+                                                            {job.format || 'MP4'}
+                                                        </span>
+                                                        {job.quality && (
+                                                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#E1B245]/20 text-[#E1B245] uppercase border border-[#E1B245]/20">
+                                                                {job.quality === 'FHD' ? '1080p' : job.quality === 'HD' ? '720p' : job.quality}
+                                                            </span>
+                                                        )}
+                                                        {job.fps && (
+                                                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-white/10 text-white/60">
+                                                                {job.fps}fps
+                                                            </span>
+                                                        )}
+
+                                                        <div className="flex-1 min-w-4 flex justify-end">
+                                                            {job.startTimeMs && (
+                                                                <span className="text-[10px] text-white/40 flex items-center gap-1 bg-black/30 px-2 py-0.5 rounded-full border border-white/5">
+                                                                    <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>schedule</span>
+                                                                    {new Intl.DateTimeFormat('id-ID', {
+                                                                        weekday: 'short',
+                                                                        day: '2-digit',
+                                                                        month: 'short',
+                                                                        hour: '2-digit',
+                                                                        minute: '2-digit'
+                                                                    }).format(new Date(job.startTimeMs))}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
                                                 </div>
 
                                                 {!isSelectMode && (
@@ -478,6 +604,43 @@ export default function DownloadCenter() {
                                 >
                                     {isZipping ? <span className="material-symbols-outlined animate-spin text-[18px]">progress_activity</span> : <span className="material-symbols-outlined text-[18px]">download</span>}
                                     {isZipping ? 'Downloading...' : 'Download All'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
+
+            {/* Clear Confirmation Popup */}
+            {showClearConfirm && typeof document !== 'undefined' && createPortal(
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+                    <div className="bg-[#121212] border border-white/10 rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl" style={{ animation: 'modalSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1)' }}>
+                        <div className="p-6 text-center">
+                            <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mx-auto mb-4">
+                                <span className="material-symbols-outlined text-red-400 text-3xl">delete_sweep</span>
+                            </div>
+                            <h3 className="text-lg font-bold text-white mb-2">Clear Export History?</h3>
+                            <p className="text-sm text-white/60 mb-6 leading-relaxed">
+                                Are you sure you want to clear your download queue? This will remove {completedJobsCount} completed item(s).
+                            </p>
+
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setShowClearConfirm(false)}
+                                    className="flex-1 py-3 px-4 rounded-xl text-sm font-semibold text-white bg-white/5 hover:bg-white/10 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        clearCompleted();
+                                        setShowClearConfirm(false);
+                                    }}
+                                    className="flex-1 py-3 px-4 rounded-xl text-sm font-bold text-white bg-red-500 hover:bg-red-600 transition-all flex items-center justify-center gap-2"
+                                >
+                                    <span className="material-symbols-outlined text-[18px]">delete</span>
+                                    Clear History
                                 </button>
                             </div>
                         </div>

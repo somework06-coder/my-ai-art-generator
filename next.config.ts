@@ -1,14 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Server-side packages that should not be bundled
-  serverExternalPackages: ['puppeteer', 'fluent-ffmpeg', '@ffmpeg-installer/ffmpeg'],
-
-  // Enable server-side features for Puppeteer
-  experimental: {
-    serverActions: {
-      bodySizeLimit: '10mb',
-    },
+  // Ensure Next.js uses SSG instead of SSR
+  output: 'export',
+  // Required to use Next.js Image component in SSG mode
+  images: {
+    unoptimized: true,
   },
   // Empty turbopack config to silence warning
   turbopack: {},

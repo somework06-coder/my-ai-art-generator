@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Motion Studio | AI Abstract Motion Background Generator",
-  description: "Generate stunning stock-ready abstract motion backgrounds with AI-powered procedural visuals. Create fluid gradients, particle waves, and geometric animations.",
+  title: "Mossion | Design the unseen",
+  description: "Generate breathtaking procedural art and animations purely from text prompts.",
   keywords: ["abstract motion", "background generator", "stock video", "AI video", "motion graphics", "procedural animation"],
 };
 
@@ -23,13 +23,7 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
         <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
-
-        {/* PWA Tags */}
-        <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#050505" />
-        <link rel="apple-touch-icon" href="/icons/icon-192.png" />
-        <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
       </head>
       <body>
         <RegisterSW />
@@ -41,3 +35,4 @@ export default function RootLayout({
     </html>
   );
 }
+

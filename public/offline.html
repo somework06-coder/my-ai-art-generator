@@ -1,9 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Motion Studio - Offline</title>
+    <title>Mossion - Offline</title>
     <meta name="theme-color" content="#050505" />
     <style>
         body {
@@ -19,6 +20,7 @@
             height: 100vh;
             text-align: center;
         }
+
         .icon {
             width: 80px;
             height: 80px;
@@ -30,15 +32,18 @@
             justify-content: center;
             margin-bottom: 24px;
         }
+
         .icon svg {
             width: 40px;
             height: 40px;
         }
+
         h1 {
             font-size: 24px;
             font-weight: 700;
             margin: 0 0 12px 0;
         }
+
         p {
             color: rgba(255, 255, 255, 0.6);
             font-size: 16px;
@@ -46,6 +51,7 @@
             margin: 0 0 32px 0;
             line-height: 1.5;
         }
+
         button {
             background-color: #E1B245;
             color: #000000;
@@ -57,11 +63,13 @@
             cursor: pointer;
             transition: opacity 0.2s;
         }
+
         button:hover {
             opacity: 0.9;
         }
     </style>
 </head>
+
 <body>
     <div class="icon">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -69,7 +77,9 @@
         </svg>
     </div>
     <h1>You are offline</h1>
-    <p>Your internet connection was lost. If you saved artworks previously, go back to view them offline in your gallery.</p>
+    <p>Your internet connection was lost. If you saved artworks previously, go back to view them offline in your
+        gallery.</p>
     <button onclick="window.location.reload()">Try Again</button>
 </body>
+
 </html>

@@ -78,7 +78,7 @@ export default function InstallPrompt() {
             </div>
 
             <div className="flex-1">
-                <h4 className="text-white font-bold text-sm mb-1">Install Motion Studio</h4>
+                <h4 className="text-white font-bold text-sm mb-1">Install Mossion</h4>
                 <p className="text-white/60 text-xs leading-relaxed mb-3">
                     Add this app to your {isIOS ? 'home screen' : 'device'} for a faster, full-screen offline experience.
                 </p>

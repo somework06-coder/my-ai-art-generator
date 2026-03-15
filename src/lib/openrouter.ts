@@ -1,9 +1,10 @@
 // Google Gemini AI Client for Dynamic Shader Generation
 // Using native fetch to call Gemini REST API directly
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
+const GEMINI_API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY || '';
 const GEMINI_MODEL = 'gemini-2.0-flash';
 const GEMINI_BASE_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+const PROXY_URL = process.env.NEXT_PUBLIC_PROXY_URL || '';
 
 // Common GLSL helper functions that AI might use (reused from gemini.ts for consistency)
 const GLSL_HELPER_FUNCTIONS = `
@@ -282,14 +283,8 @@ const RANDOM_PROMPTS = [
     "Abstract particle dust floating in light beam, cinematic dust motes, magical fantasy atmosphere, volumetric lighting effects."
 ];
 
-export interface GeneratedShader {
-    id: string;
-    prompt: string;
-    fragmentCode: string;
-    timestamp: number;
-    duration: number;
-    metadata?: import('@/types').StockMetadata;
-}
+import { GeneratedShader } from '@/types';
+import { getRandomFallbackShader } from '@/lib/fallbackShaders';
 
 // Generate shader from user prompt using Gemini API
 export async function generateShaderFromPrompt(
@@ -300,8 +295,8 @@ export async function generateShaderFromPrompt(
     duration: number = 10
 ): Promise<GeneratedShader> {
     try {
-        if (!GEMINI_API_KEY) {
-            throw new Error('GEMINI_API_KEY is not defined in environment variables');
+        if (!PROXY_URL && !GEMINI_API_KEY) {
+            throw new Error('Neither PROXY_URL nor GEMINI_API_KEY is defined in environment variables');
         }
 
         // --- Speed Logic ---
@@ -372,7 +367,9 @@ export async function generateShaderFromPrompt(
         };
 
         // Parallel AI Requests: Shader + Metadata
-        const shaderPromise = fetch(`${GEMINI_BASE_URL}?key=${GEMINI_API_KEY}`, {
+        const requestUrl = PROXY_URL ? PROXY_URL : `${GEMINI_BASE_URL}?key=${GEMINI_API_KEY}`;
+        // Note: For Phase B, we will pass the Supabase JWT here. For now, it just calls the proxy.
+        const shaderPromise = fetch(requestUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -402,11 +399,31 @@ export async function generateShaderFromPrompt(
             fragmentCode,
             timestamp: Date.now(),
             duration,
+            aspectRatio: '16:9', // Default, will be overridden by caller
             metadata: metadata || undefined
         };
     } catch (error) {
         console.error('Failed to generate shader (Gemini):', error);
-        throw new Error('Failed to generate shader from AI');
+        console.log('Using fallback shader template instead...');
+
+        // Instead of throwing, return a random fallback shader
+        const { shader: fallback } = getRandomFallbackShader();
+        const fragmentCode = buildFullShader(fallback.code, duration);
+
+        return {
+            id: generateId(),
+            prompt: fallback.prompt,
+            fragmentCode,
+            timestamp: Date.now(),
+            duration,
+            aspectRatio: '16:9',
+            metadata: {
+                title: fallback.title,
+                description: `Fallback: ${fallback.prompt}`,
+                keywords: ['abstract', 'generative', 'art', 'animation', 'loop', 'motion', 'background'],
+                category: 'Backgrounds'
+            }
+        };
     }
 }
 
@@ -420,16 +437,38 @@ export async function generateRandomShaders(
 ): Promise<GeneratedShader[]> {
     const selectedPrompts = getRandomItems(RANDOM_PROMPTS, count);
 
-    const results = await Promise.all(
-        // Ensure duration is passed correctly here too
+    const results = await Promise.allSettled(
         selectedPrompts.map(prompt => generateShaderFromPrompt(prompt, vibe, complexity, speed, duration))
     );
 
-    return results;
+    // Each call already has its own fallback, so fulfilled results are guaranteed.
+    // But just in case, handle any remaining rejected promises with another fallback.
+    return results.map(result => {
+        if (result.status === 'fulfilled') {
+            return result.value;
+        }
+        // This shouldn't happen since generateShaderFromPrompt now catches internally,
+        // but as a safety net:
+        const { shader: fallback } = getRandomFallbackShader();
+        return {
+            id: generateId(),
+            prompt: fallback.prompt,
+            fragmentCode: buildFullShader(fallback.code, duration),
+            timestamp: Date.now(),
+            duration,
+            aspectRatio: '16:9' as const,
+            metadata: {
+                title: fallback.title,
+                description: `Fallback: ${fallback.prompt}`,
+                keywords: ['abstract', 'generative', 'art', 'loop'],
+                category: 'Backgrounds'
+            }
+        };
+    });
 }
 
 // Build full shader with uniforms and helpers (2D Canvas Engine)
-function buildFullShader(aiCode: string, duration: number = 10): string {
+export function buildFullShader(aiCode: string, duration: number = 10): string {
     // Ensure duration has a decimal for GLSL float (e.g. 10.0)
     const durationFloat = duration.toFixed(1);
 
@@ -700,7 +739,7 @@ function getRandomItems<T>(array: T[], count: number): T[] {
 // Generate Stock Metadata for SEO
 async function generateStockMetadata(prompt: string, vibe: string, complexity: string): Promise<import('@/types').StockMetadata | null> {
     try {
-        if (!GEMINI_API_KEY) return null;
+        if (!PROXY_URL && !GEMINI_API_KEY) return null;
 
         const systemPrompt = `You are an expert SEO metadata generator for stock video sites (Shutterstock, Adobe Stock).
 Given a user's prompt, art style, and complexity, generate metadata for the resulting abstract generative art loop.
@@ -723,7 +762,8 @@ Do not include any markdown formatting or \`\`\`json block. Return raw JSON text
             }
         };
 
-        const response = await fetch(`${GEMINI_BASE_URL}?key=${GEMINI_API_KEY}`, {
+        const requestUrl = PROXY_URL ? PROXY_URL : `${GEMINI_BASE_URL}?key=${GEMINI_API_KEY}`;
+        const response = await fetch(requestUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(requestBody)

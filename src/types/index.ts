@@ -12,6 +12,7 @@ export interface GeneratedShader {
     prompt: string;
     fragmentCode: string;
     timestamp: number;
+    createdAt?: number;
     aspectRatio: AspectRatio;
     duration: number; // Native loop duration in seconds
     metadata?: StockMetadata;

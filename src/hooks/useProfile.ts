@@ -5,6 +5,7 @@ import { createClient } from '@/utils/supabase/client';
 
 export type UserProfile = {
     id: string;
+    full_name?: string;
     render_tier: 'regular' | 'super';
     credits: number;
     // ...other fields if needed

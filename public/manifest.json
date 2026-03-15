@@ -1,7 +1,7 @@
 {
-    "name": "Motion Studio — AI Generative Art",
-    "short_name": "Motion Studio",
-    "description": "Generate stunning abstract motion backgrounds with AI",
+    "name": "Mossion — Design the Unseen",
+    "short_name": "Mossion",
+    "description": "AI-powered generative art & motion design studio",
     "start_url": "/",
     "display": "standalone",
     "theme_color": "#050505",

@@ -1,6 +1,10 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { invoke } from '@tauri-apps/api/core';
+import { writeFile, mkdir } from '@tauri-apps/plugin-fs';
+import { join } from '@tauri-apps/api/path';
+import { ShaderRenderer } from '@/lib/shaderRenderer';
 
 export type JobStatus = 'queued' | 'processing' | 'completed' | 'failed' | 'queued-offline';
 
@@ -32,12 +36,61 @@ type DownloadQueueContextType = {
     removeJob: (jobId: string) => void;
     updateJob: (jobId: string, updates: Partial<ExportJob>) => void;
     clearCompleted: () => void;
+    autoClearOnClose: boolean;
+    setAutoClearOnClose: (val: boolean) => void;
 };
 
 const DownloadQueueContext = createContext<DownloadQueueContextType | undefined>(undefined);
 
 export function DownloadQueueProvider({ children }: { children: React.ReactNode }) {
     const [jobs, setJobs] = useState<ExportJob[]>([]);
+    const [autoClearOnClose, setAutoClearOnClose] = useState<boolean>(false);
+    const [isLoaded, setIsLoaded] = useState(false);
+
+    // React state updates are async, so we need a ref to prevent race conditions
+    // where multiple jobs start rendering before the first one's state updates
+    const isProcessingRef = useRef(false);
+
+    // Initial Load from localStorage
+    useEffect(() => {
+        const savedAutoClear = localStorage.getItem('mossion_auto_clear');
+        if (savedAutoClear === 'true') {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            setAutoClearOnClose(true);
+        }
+
+        const savedJobs = localStorage.getItem('mossion_download_queue');
+        if (savedJobs && savedAutoClear !== 'true') {
+            try {
+                const parsed = JSON.parse(savedJobs) as ExportJob[];
+                // Mark any interrupted jobs as failed so they don't get stuck processing forever
+                const validJobs = parsed.map(j =>
+                    (j.status === 'processing' || j.status === 'queued')
+                        ? { ...j, status: 'failed' as JobStatus, statusText: 'Interrupted by reload' }
+                        : j
+                );
+                // eslint-disable-next-line react-hooks/set-state-in-effect
+                setJobs(validJobs);
+            } catch (e) {
+                console.error("Failed to parse saved download queue");
+            }
+        }
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setIsLoaded(true);
+    }, []);
+
+    // Sync to localStorage
+    useEffect(() => {
+        if (!isLoaded) return;
+
+        localStorage.setItem('mossion_auto_clear', String(autoClearOnClose));
+
+        if (!autoClearOnClose) {
+            localStorage.setItem('mossion_download_queue', JSON.stringify(jobs));
+        } else {
+            localStorage.removeItem('mossion_download_queue');
+        }
+    }, [jobs, autoClearOnClose, isLoaded]);
 
     useEffect(() => {
         const activeJobs = jobs.filter(j =>
@@ -60,6 +113,7 @@ export function DownloadQueueProvider({ children }: { children: React.ReactNode 
                         progress: pollData.progress,
                         videoUrl: pollData.videoUrl
                     };
+                    // eslint-disable-next-line @typescript-eslint/no-unused-vars
                 } catch (e) {
                     return job;
                 }
@@ -77,11 +131,15 @@ export function DownloadQueueProvider({ children }: { children: React.ReactNode 
 
     // Sequential Processor for Local Renders
     useEffect(() => {
-        // Find if we are currently processing a local job
-        const isProcessing = jobs.some(j => j.status === 'processing' && j.jobId.startsWith('local-'));
+        // If we are already processing one in memory, wait. 
+        if (isProcessingRef.current) return;
 
-        // If we are already processing one, wait. We only do ONE at a time sequentially.
-        if (isProcessing) return;
+        // Double check state just in case
+        const isProcessingState = jobs.some(j => j.status === 'processing' && j.jobId.startsWith('local-'));
+        if (isProcessingState) {
+            isProcessingRef.current = true;
+            return;
+        }
 
         // Find the next pending local job in the queue
         const nextJob = jobs.find(j => (j.status === 'queued' || j.status === 'queued-offline') && j.jobId.startsWith('local-'));
@@ -89,72 +147,114 @@ export function DownloadQueueProvider({ children }: { children: React.ReactNode 
 
         // Prevent infinite loops by creating an inner async function
         const processJob = async () => {
-            // --- OFFLINE DETECTION & BACKGROUND SYNC ---
-            if (!navigator.onLine) {
-                setJobs(prev => prev.map(j => j.jobId === nextJob.jobId ? {
-                    ...j,
-                    status: 'queued-offline',
-                    statusText: 'Waiting for network...'
-                } : j));
+            // LOCK immediately
+            isProcessingRef.current = true;
 
-                // Try applying true SW Background Sync if supported (Chrome/Android)
-                if ('serviceWorker' in navigator && 'SyncManager' in window) {
-                    try {
-                        const registration = await navigator.serviceWorker.ready;
-                        await (registration as any).sync.register('export-video-sync');
-                        console.log('Background sync registered');
-                    } catch (err) {
-                        console.log('Background sync could not be registered', err);
-                    }
-                }
-                return;
-            }
-
-            // Immediately mark as processing so the next effect tick doesn't pick it up again
+            // Immediately mark as processing so the UI updates
             setJobs(prev => prev.map(j => j.jobId === nextJob.jobId ? { ...j, status: 'processing', statusText: `Rendering ${nextJob.quality}...` } : j));
 
             try {
-                // We use a fake progress interval just to show UI movement
-                let simulatedProgress = 0;
-                const progressInterval = setInterval(() => {
-                    simulatedProgress += 5;
-                    if (simulatedProgress < 90) {
-                        setJobs(prev => prev.map(j => j.jobId === nextJob.jobId ? { ...j, progress: simulatedProgress } : j));
-                    }
-                }, 1000);
+                // 1. Get OS Temp Directory from Tauri Backend
+                const baseTempDir = await invoke<string>('get_temp_dir');
+                // Tauri join returns string directly
+                const jobTempDir = await join(baseTempDir, `mossion_export_${nextJob.jobId}`);
 
-                const response = await fetch('/api/export-video', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        shaderCode: nextJob.shaderCode,
-                        aspectRatio: nextJob.aspectRatio || '16:9',
-                        quality: nextJob.quality || 'HD',
-                        crf: nextJob.crf || 23,
-                        duration: nextJob.duration || 10,
-                        fps: nextJob.fps || 30,
-                        format: nextJob.format || 'mp4',
-                        metadata: nextJob.metadata
-                    })
-                });
+                // Create directory
+                await mkdir(jobTempDir, { recursive: true });
 
-                clearInterval(progressInterval);
+                // 2. Setup Offscreen Canvas & Renderer
+                const canvas = document.createElement('canvas');
+                const renderer = new ShaderRenderer();
 
-                if (!response.ok) {
-                    throw new Error('Export failed');
+                // Init with requested aspect ratio, but NOT as preview (full res)
+                renderer.init(canvas, (nextJob.aspectRatio as '16:9' | '9:16' | '1:1') || '16:9', false, nextJob.quality || '720p');
+
+                // Inject the AI Shader
+                if (nextJob.shaderCode) {
+                    renderer.loadShader(nextJob.shaderCode);
                 }
 
-                setJobs(prev => prev.map(j => j.jobId === nextJob.jobId ? { ...j, progress: 95, statusText: 'Downloading...' } : j));
+                // Wait a tiny bit for Shader to compile
+                await new Promise(r => setTimeout(r, 500));
 
-                const blob = await response.blob();
-                const url = URL.createObjectURL(blob);
+                const fps = nextJob.fps || 30;
+                const duration = nextJob.duration || 10;
+                const totalFrames = Math.floor(duration * fps);
+
+                // 3. Frame Capture Loop
+                for (let i = 0; i < totalFrames; i++) {
+                    const time = i / fps;
+                    // Force render specific time
+                    renderer['uniforms'].uTime.value = time;
+                    renderer['renderer']?.render(renderer['scene'], renderer['camera']);
+
+                    // Extract JPEG payload from canvas
+                    const dataUrl = canvas.toDataURL('image/jpeg', 1.0);
+                    // Remove "data:image/jpeg;base64," prefix
+                    const base64Data = dataUrl.split(',')[1];
+                    const binaryString = atob(base64Data);
+                    const bytes = new Uint8Array(binaryString.length);
+                    for (let j = 0; j < binaryString.length; j++) {
+                        bytes[j] = binaryString.charCodeAt(j);
+                    }
+
+                    // Save to Tauri FS
+                    const frameName = `frame_${String(i).padStart(5, '0')}.jpg`;
+                    const framePath = await join(jobTempDir, frameName);
+                    await writeFile(framePath, bytes);
+
+                    // Update UI Progress (0% to 50% for rendering frames)
+                    if (i % 5 === 0) {
+                        const progress = Math.round((i / totalFrames) * 50);
+                        setJobs(prev => prev.map(j => j.jobId === nextJob.jobId ? { ...j, progress, statusText: 'Extracting Frames...' } : j));
+                    }
+                }
+
+                // Cleanup renderer memory
+                renderer.dispose();
+
+                setJobs(prev => prev.map(j => j.jobId === nextJob.jobId ? { ...j, progress: 50, statusText: `Encoding ${nextJob.format ? nextJob.format.toUpperCase() : 'MP4'}...` } : j));
+
+                // 4. Invoke Rust FFmpeg Sidecar
+                const formatExt = nextJob.format || 'mp4';
+                const outputPath = await join(jobTempDir, `output_${nextJob.jobId}.${formatExt}`);
+
+                let baseW = 1280;
+                let baseH = 720;
+                const q = nextJob.quality || 'HD';
+                const ar = nextJob.aspectRatio || '16:9';
+
+                if (q === 'FHD' || q === '1080p') {
+                    baseW = 1920;
+                    baseH = 1080;
+                } else if (q === '4K') {
+                    baseW = 3840;
+                    baseH = 2160;
+                }
+
+                let finalW = baseW;
+                let finalH = baseH;
+                if (ar === '9:16') { finalW = baseH; finalH = baseW; }
+                else if (ar === '1:1') { finalW = baseH; finalH = baseH; }
+
+                await invoke('export_video', {
+                    inputFramesDir: jobTempDir,
+                    fps: fps,
+                    crf: nextJob.crf || 18,
+                    outputPath: outputPath,
+                    width: finalW,
+                    height: finalH
+                });
+
+                // 5. Done! The video is sitting in the temp folder. 
+                // We'll pass this absolute path to the DownloadCenter.
 
                 setJobs(prev => prev.map(j => j.jobId === nextJob.jobId ? {
                     ...j,
                     status: 'completed',
                     progress: 100,
                     statusText: 'Done',
-                    videoUrl: url
+                    videoUrl: outputPath // Storing raw local path
                 } : j));
 
             } catch (error) {
@@ -164,6 +264,9 @@ export function DownloadQueueProvider({ children }: { children: React.ReactNode 
                     status: 'failed',
                     statusText: 'Export Failed'
                 } : j));
+            } finally {
+                // UNLOCK so the next job can be picked up by the effect
+                isProcessingRef.current = false;
             }
         };
 
@@ -202,7 +305,10 @@ export function DownloadQueueProvider({ children }: { children: React.ReactNode 
     };
 
     return (
-        <DownloadQueueContext.Provider value={{ jobs, addJob, removeJob, updateJob, clearCompleted }}>
+        <DownloadQueueContext.Provider value={{
+            jobs, addJob, removeJob, updateJob, clearCompleted,
+            autoClearOnClose, setAutoClearOnClose
+        }}>
             {children}
         </DownloadQueueContext.Provider>
     );

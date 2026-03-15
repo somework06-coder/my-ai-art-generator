@@ -1,16 +1,21 @@
 'use client'
 
+import { useState } from "react"
 import { createClient } from "@/utils/supabase/client"
 import Link from "next/link"
 import { useRouter, usePathname } from "next/navigation"
+import SignOutConfirmModal from "./SignOutConfirmModal"
+import type { User } from '@supabase/supabase-js'
 
-export default function AuthButton({ user }: { user: any }) {
+export default function AuthButton({ user }: { user: User | null }) {
     const router = useRouter()
     const supabase = createClient()
     const pathname = usePathname()
+    const [showConfirm, setShowConfirm] = useState(false)
 
     const handleLogout = async () => {
         await supabase.auth.signOut()
+        setShowConfirm(false)
         router.refresh()
     }
 
@@ -49,7 +54,7 @@ export default function AuthButton({ user }: { user: any }) {
                 color: '#666',
             }}>{user.email}</span>
             <button
-                onClick={handleLogout}
+                onClick={() => setShowConfirm(true)}
                 style={{
                     background: 'none',
                     border: 'none',
@@ -64,6 +69,12 @@ export default function AuthButton({ user }: { user: any }) {
             >
                 Sign Out
             </button>
+
+            <SignOutConfirmModal
+                isOpen={showConfirm}
+                onClose={() => setShowConfirm(false)}
+                onConfirm={handleLogout}
+            />
         </div>
     )
 }

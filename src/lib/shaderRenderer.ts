@@ -13,16 +13,52 @@ void main() {
 }
 `;
 
-// Fallback fragment shader
+// High-quality Fallback fragment shader (Neon Hex Grid Pulse)
 const FALLBACK_FRAGMENT = `
 uniform float uTime;
 uniform vec2 uResolution;
 varying vec2 vUv;
 
+float hash(vec2 p) {
+    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+
+vec3 palette(float t) {
+    vec3 a = vec3(0.5, 0.5, 0.5);
+    vec3 b = vec3(0.5, 0.5, 0.5);
+    vec3 c = vec3(1.0, 1.0, 1.0);
+    vec3 d = vec3(0.263, 0.416, 0.557);
+    return a + b * cos(6.28318 * (c * t + d));
+}
+
 void main() {
-    vec2 uv = vUv;
-    vec3 color = 0.5 + 0.5 * cos(uTime + uv.xyx + vec3(0, 2, 4));
-    gl_FragColor = vec4(color, 1.0);
+    // Normalize coordinates and center
+    vec2 uv = (vUv - 0.5) * 2.0;
+    uv.x *= uResolution.x / uResolution.y;
+    
+    vec2 uv0 = uv;
+    vec3 finalColor = vec3(0.0);
+    
+    // Fractal iterations
+    for (float i = 0.0; i < 3.0; i++) {
+        uv = fract(uv * 1.5) - 0.5;
+        float d = length(uv) * exp(-length(uv0));
+        
+        vec3 col = palette(length(uv0) + i*.4 + uTime*.4);
+        
+        d = sin(d*8. + uTime)/8.;
+        d = abs(d);
+        
+        // Glow effect
+        d = pow(0.01 / d, 1.2);
+        
+        finalColor += col * d;
+    }
+    
+    // Vignette
+    finalColor *= 1.2 - length(uv0) * 0.5;
+
+    gl_FragColor = vec4(finalColor, 1.0);
 }
 `;
 
@@ -53,7 +89,7 @@ export class ShaderRenderer {
         };
     }
 
-    init(canvas: HTMLCanvasElement, aspectRatio: AspectRatio = '16:9', isPreview: boolean = true): void {
+    init(canvas: HTMLCanvasElement, aspectRatio: AspectRatio = '16:9', isPreview: boolean = true, quality: string = '720p'): void {
         this.canvas = canvas;
 
         this.renderer = new THREE.WebGLRenderer({
@@ -69,7 +105,7 @@ export class ShaderRenderer {
         // Use lower resolution for preview grid, full res only for export
         const { width, height } = isPreview
             ? this.getPreviewResolution(aspectRatio)
-            : this.getResolution(aspectRatio);
+            : this.getResolution(aspectRatio, quality);
         this.renderer.setSize(width, height);
         this.uniforms.uResolution.value.set(width, height);
 
@@ -114,49 +150,100 @@ export class ShaderRenderer {
 
     // Load custom shader code (from AI generation)
     loadShader(fragmentCode: string): { success: boolean; error?: string } {
+        if (!this.renderer || !this.mesh) return { success: false, error: 'Not initialized' };
+
         try {
-            // Create a test material to check for compilation errors
+            // Save current material in case of failure
+            const oldMaterial = this.material;
+
             const testMaterial = new THREE.ShaderMaterial({
                 vertexShader: DEFAULT_VERTEX,
                 fragmentShader: fragmentCode,
                 uniforms: this.uniforms
             });
 
-            // Apply the shader
-            if (this.material) {
-                this.material.dispose();
-            }
             this.material = testMaterial;
+            this.mesh.material = this.material;
 
-            if (this.mesh) {
-                this.mesh.material = this.material;
+            // Force compilation synchronously and spy on console.error
+            let hasError = false;
+            let errorMessage = '';
+            const originalConsoleError = console.error;
+
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            console.error = (...args: any[]) => {
+                const msg = args.join(' ');
+                // Three.js logs WebGL shader errors with "THREE.WebGLProgram"
+                if (msg.includes('THREE.WebGLProgram') || msg.includes('shader') || msg.includes('error')) {
+                    hasError = true;
+                    errorMessage = msg;
+                    // Log as a warning instead of error to prevent Next.js from throwing the red dev overlay
+                    console.warn('[Shader Compilation Failed - Loading Fallback]', msg);
+                    return; // Crucial: skip calling originalConsoleError
+                }
+                originalConsoleError.apply(console, args);
+            };
+
+            // Force Three.js to render immediately, which synchronously triggers WebGLProgram compilation errors
+            this.renderer.render(this.scene, this.camera);
+
+            // Restore console.error immediately after render
+            console.error = originalConsoleError;
+
+            if (hasError) {
+                console.warn('Shader syntax error detected by renderer. Using beautiful fallback!');
+
+                // Revert to old material or load a beautiful fallback shader dynamically
+                this.material.dispose();
+
+                // We need to import getRandomFallbackShader at the top, but we can do it inline or just use the existing FALLBACK_FRAGMENT if we can't.
+                // Actually, let's just use the built-in fallback fragment, but make it prettier!
+                this.createMaterial(FALLBACK_FRAGMENT);
+                this.currentFragmentCode = FALLBACK_FRAGMENT;
+
+                return {
+                    success: false,
+                    error: errorMessage || 'Shader syntax error'
+                };
             }
 
+            // Success! Dispose the old material
+            if (oldMaterial) oldMaterial.dispose();
             this.currentFragmentCode = fragmentCode;
             return { success: true };
 
         } catch (error) {
-            console.error('Shader compilation failed, using fallback:', error);
-            // Use fallback shader on error
+            console.error('Shader loading threw an unexpected error:', error);
             this.createMaterial(FALLBACK_FRAGMENT);
             return {
                 success: false,
-                error: error instanceof Error ? error.message : 'Unknown shader error'
+                error: error instanceof Error ? error.message : 'Unknown exception'
             };
         }
     }
 
-    private getResolution(aspectRatio: AspectRatio): { width: number; height: number } {
-        // Full resolution for export/recording (720p)
+    private getResolution(aspectRatio: AspectRatio, quality: string = '720p'): { width: number; height: number } {
+        // Base resolutions for 16:9
+        let baseW = 1280;
+        let baseH = 720;
+
+        if (quality === 'FHD' || quality === '1080p') {
+            baseW = 1920;
+            baseH = 1080;
+        } else if (quality === '4K') {
+            baseW = 3840;
+            baseH = 2160;
+        }
+
         switch (aspectRatio) {
             case '16:9':
-                return { width: 1280, height: 720 };
+                return { width: baseW, height: baseH };
             case '9:16':
-                return { width: 720, height: 1280 };
+                return { width: baseH, height: baseW };
             case '1:1':
-                return { width: 720, height: 720 };
+                return { width: baseH, height: baseH };
             default:
-                return { width: 1280, height: 720 };
+                return { width: baseW, height: baseH };
         }
     }
 
@@ -249,7 +336,7 @@ export class ShaderRenderer {
                     'video/webm'
                 ];
 
-                let mimeType = mimeTypes.find(type => MediaRecorder.isTypeSupported(type)) || '';
+                const mimeType = mimeTypes.find(type => MediaRecorder.isTypeSupported(type)) || '';
 
                 if (!mimeType) {
                     throw new Error('No supported video mime type found');

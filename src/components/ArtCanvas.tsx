@@ -3,6 +3,8 @@
 import { useEffect, useRef, forwardRef, useImperativeHandle, useState } from 'react';
 import { ShaderRenderer } from '@/lib/shaderRenderer';
 import { AspectRatio } from '@/types';
+import { getRandomFallbackShader } from '@/lib/fallbackShaders';
+import { buildFullShader } from '@/lib/openrouter';
 
 interface ArtCanvasProps {
     shaderCode: string;
@@ -10,6 +12,7 @@ interface ArtCanvasProps {
     isSelected?: boolean;
     onClick?: () => void;
     showLabel?: string;
+    onFixShader?: (fallbackCode: string, metadata: any, prompt: string) => void;
 }
 
 export interface ArtCanvasRef {
@@ -23,7 +26,8 @@ const ArtCanvas = forwardRef<ArtCanvasRef, ArtCanvasProps>(({
     aspectRatio = '16:9',
     isSelected = false,
     onClick,
-    showLabel
+    showLabel,
+    onFixShader
 }, ref) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -84,7 +88,24 @@ const ArtCanvas = forwardRef<ArtCanvasRef, ArtCanvasProps>(({
 
         // Load the actual shader if we have it
         if (shaderCode) {
-            rendererRef.current.loadShader(shaderCode);
+            const result = rendererRef.current.loadShader(shaderCode);
+
+            // If shader compilation failed, load a random premium fallback
+            if (!result.success) {
+                console.warn('AI shader failed to compile, loading random fallback template...');
+                const { shader: fallback } = getRandomFallbackShader();
+                const fallbackCode = buildFullShader(fallback.code, 10);
+                rendererRef.current.loadShader(fallbackCode);
+
+                if (onFixShader) {
+                    onFixShader(fallbackCode, {
+                        title: fallback.title,
+                        description: `Fallback: ${fallback.prompt}`,
+                        keywords: ['abstract', 'generative', 'art', 'loop', 'fallback'],
+                        category: 'Backgrounds'
+                    }, fallback.prompt);
+                }
+            }
         }
 
         // --- PERF: Pause shader when browser tab is hidden ---

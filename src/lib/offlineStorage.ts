@@ -1,3 +1,5 @@
+import { appDataDir, join } from '@tauri-apps/api/path';
+import { mkdir, readDir, readTextFile, writeTextFile, remove, exists } from '@tauri-apps/plugin-fs';
 
 export interface CachedShader {
     id: string; // Map to jobId or database ID
@@ -9,77 +11,85 @@ export interface CachedShader {
     metadata?: import('@/types').StockMetadata;
 }
 
-const DB_NAME = 'motion-studio-offline';
-const STORE_NAME = 'shaders';
-const DB_VERSION = 1;
+const GALLERY_FOLDER = 'gallery';
 
 class OfflineStorage {
-    private dbPromise: Promise<IDBDatabase>;
+    /**
+     * Get the gallery directory for a specific user.
+     * Structure: appDataDir/gallery/{userId}/
+     * If no userId is provided, uses a shared 'anonymous' folder.
+     */
+    private async getGalleryDir(userId?: string): Promise<string> {
+        const appData = await appDataDir();
+        const userFolder = userId || 'anonymous';
+        const galleryDir = await join(appData, GALLERY_FOLDER, userFolder);
 
-    constructor() {
-        this.dbPromise = new Promise((resolve, reject) => {
-            if (typeof window === 'undefined') {
-                return; // SSR check
+        // Ensure the directory exists
+        const dirExists = await exists(galleryDir);
+        if (!dirExists) {
+            await mkdir(galleryDir, { recursive: true });
+        }
+
+        return galleryDir;
+    }
+
+    private async getFilePath(id: string, userId?: string): Promise<string> {
+        const dir = await this.getGalleryDir(userId);
+        return await join(dir, `${id}.json`);
+    }
+
+    async saveShader(shader: CachedShader, userId?: string): Promise<void> {
+        try {
+            const filePath = await this.getFilePath(shader.id, userId);
+            const data = JSON.stringify(shader, null, 2);
+            await writeTextFile(filePath, data);
+        } catch (error) {
+            console.error('Failed to save shader to native FS:', error);
+            throw error;
+        }
+    }
+
+    async getAllShaders(userId?: string): Promise<CachedShader[]> {
+        try {
+            const dir = await this.getGalleryDir(userId);
+            const entries = await readDir(dir);
+
+            const shaders: CachedShader[] = [];
+
+            for (const entry of entries) {
+                if (entry.isFile && entry.name.endsWith('.json')) {
+                    try {
+                        const filePath = await join(dir, entry.name);
+                        const fileContent = await readTextFile(filePath);
+                        const shader = JSON.parse(fileContent) as CachedShader;
+                        shaders.push(shader);
+                    } catch (err) {
+                        console.error(`Failed to read or parse gallery file ${entry.name}:`, err);
+                        // Skip corrupted files
+                    }
+                }
             }
 
-            const request = indexedDB.open(DB_NAME, DB_VERSION);
+            // Sort by createdAt descending (newest first)
+            return shaders.sort((a, b) => b.createdAt - a.createdAt);
 
-            request.onerror = () => reject(request.error);
-            request.onsuccess = () => resolve(request.result);
-
-            request.onupgradeneeded = (event) => {
-                const db = (event.target as IDBOpenDBRequest).result;
-                if (!db.objectStoreNames.contains(STORE_NAME)) {
-                    // Create object store with 'id' as the keyPath
-                    const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
-                    // Index by creation time to sort easily
-                    store.createIndex('createdAt', 'createdAt', { unique: false });
-                }
-            };
-        });
+        } catch (error) {
+            console.error('Failed to get all shaders from native FS:', error);
+            return [];
+        }
     }
 
-    async saveShader(shader: CachedShader): Promise<void> {
-        const db = await this.dbPromise;
-        return new Promise((resolve, reject) => {
-            const transaction = db.transaction(STORE_NAME, 'readwrite');
-            const store = transaction.objectStore(STORE_NAME);
-            const request = store.put(shader); // put adds or updates
-
-            request.onsuccess = () => resolve();
-            request.onerror = () => reject(request.error);
-        });
-    }
-
-    async getAllShaders(): Promise<CachedShader[]> {
-        const db = await this.dbPromise;
-        return new Promise((resolve, reject) => {
-            const transaction = db.transaction(STORE_NAME, 'readonly');
-            const store = transaction.objectStore(STORE_NAME);
-            const index = store.index('createdAt');
-
-            // Get all records, sorted by createdAt (ascending by default via cursor)
-            const request = index.getAll();
-
-            request.onsuccess = () => {
-                // Reverse to get newest first
-                const results = (request.result as CachedShader[]).reverse();
-                resolve(results);
-            };
-            request.onerror = () => reject(request.error);
-        });
-    }
-
-    async deleteShader(id: string): Promise<void> {
-        const db = await this.dbPromise;
-        return new Promise((resolve, reject) => {
-            const transaction = db.transaction(STORE_NAME, 'readwrite');
-            const store = transaction.objectStore(STORE_NAME);
-            const request = store.delete(id);
-
-            request.onsuccess = () => resolve();
-            request.onerror = () => reject(request.error);
-        });
+    async deleteShader(id: string, userId?: string): Promise<void> {
+        try {
+            const filePath = await this.getFilePath(id, userId);
+            const fileExists = await exists(filePath);
+            if (fileExists) {
+                await remove(filePath);
+            }
+        } catch (error) {
+            console.error(`Failed to delete shader ${id} from native FS:`, error);
+            throw error;
+        }
     }
 }
 

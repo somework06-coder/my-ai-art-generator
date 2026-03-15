@@ -2,35 +2,36 @@
 
 import { useEffect } from 'react';
 
+/**
+ * This component UNREGISTERS any leftover service workers from the old PWA setup.
+ * Since we migrated to a Tauri desktop app, service workers are no longer needed
+ * and can cause stale cache issues.
+ */
 export function RegisterSW() {
     useEffect(() => {
-        // Only run in the browser and if service workers are supported
         if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-
-            // Register SW after window load to not block critical rendering
-            const handleLoad = () => {
-                navigator.serviceWorker
-                    .register('/sw.js')
-                    .then((registration) => {
-                        console.log('Service Worker registered with scope:', registration.scope);
-                    })
-                    .catch((error) => {
-                        console.error('Service Worker registration failed:', error);
+            // Unregister all service workers
+            navigator.serviceWorker.getRegistrations().then((registrations) => {
+                for (const registration of registrations) {
+                    registration.unregister().then((success) => {
+                        if (success) {
+                            console.log('Service Worker unregistered successfully');
+                        }
                     });
-            };
+                }
+            });
 
-            // If document is already loaded, register immediately
-            if (document.readyState === 'complete') {
-                handleLoad();
-            } else {
-                window.addEventListener('load', handleLoad);
+            // Clear all caches
+            if ('caches' in window) {
+                caches.keys().then((cacheNames) => {
+                    cacheNames.forEach((cacheName) => {
+                        caches.delete(cacheName);
+                        console.log('Cache cleared:', cacheName);
+                    });
+                });
             }
-
-            return () => {
-                window.removeEventListener('load', handleLoad);
-            };
         }
     }, []);
 
-    return null; /* Renderless component */
+    return null;
 }

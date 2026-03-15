@@ -2,13 +2,19 @@
 
 import { useState, useEffect } from 'react';
 import { GenerationMode, AspectRatio } from '@/types';
+import type { User } from '@supabase/supabase-js';
+import AuthGateModal from './AuthGateModal';
 
 interface GeneratorInputProps {
     onGenerate: (mode: GenerationMode, aspectRatio: AspectRatio, prompt?: string, count?: number, vibe?: string, complexity?: string, speed?: string, duration?: number) => void;
     isLoading: boolean;
+    creditsLoading?: boolean;
+    user: User | null;
+    credits?: number;
 }
 
-export default function GeneratorInput({ onGenerate, isLoading }: GeneratorInputProps) {
+export default function GeneratorInput({ onGenerate, isLoading, creditsLoading, user, credits }: GeneratorInputProps) {
+    const [showAuthGate, setShowAuthGate] = useState(false);
     const [mode, setMode] = useState<GenerationMode>('prompt');
     const [prompt, setPrompt] = useState('');
     const [count, setCount] = useState(4);
@@ -23,6 +29,7 @@ export default function GeneratorInput({ onGenerate, isLoading }: GeneratorInput
 
     useEffect(() => {
         // Hydrate offline state
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setIsOnline(navigator.onLine);
 
         const handleOnline = () => setIsOnline(true);
@@ -39,6 +46,12 @@ export default function GeneratorInput({ onGenerate, isLoading }: GeneratorInput
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+
+        if (!user) {
+            setShowAuthGate(true);
+            return;
+        }
+
         if (mode === 'prompt' && prompt.trim()) {
             onGenerate('prompt', aspectRatio, prompt.trim(), undefined, vibe, complexity, speed, duration);
         } else if (mode === 'random') {
@@ -260,28 +273,43 @@ export default function GeneratorInput({ onGenerate, isLoading }: GeneratorInput
                     </div>
                 )}
 
-                {/* Generate Button */}
-                <button
-                    type="submit"
-                    className={`generate-btn ${(!isOnline && !isLoading) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    disabled={isLoading || !isOnline || (mode === 'prompt' && !prompt.trim())}
-                    title={!isOnline ? "Connect to the internet to generate new art" : "Generate Art"}
-                >
-                    {!isOnline ? (
-                        <>
-                            <span className="material-symbols-outlined">wifi_off</span>
-                            Offline
-                        </>
-                    ) : isLoading ? (
-                        <>
-                            <span className="spinner"></span>
-                            Generating...
-                        </>
-                    ) : (
-                        <><span className="material-symbols-outlined">brush</span> Generate Art</>
+                {/* Generate Button Area */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <button
+                        type="submit"
+                        className={`generate-btn ${(!isOnline && !isLoading && !creditsLoading) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        disabled={isLoading || creditsLoading || !isOnline || (mode === 'prompt' && !prompt.trim())}
+                        title={!isOnline ? "Connect to the internet to generate new art" : "Generate Art"}
+                    >
+                        {!isOnline ? (
+                            <>
+                                <span className="material-symbols-outlined">wifi_off</span>
+                                Offline
+                            </>
+                        ) : isLoading ? (
+                            <>
+                                <span className="spinner"></span>
+                                Generating...
+                            </>
+                        ) : creditsLoading ? (
+                            <>
+                                <span className="spinner"></span>
+                                Checking Credits...
+                            </>
+                        ) : (
+                            <><span className="material-symbols-outlined">brush</span> Generate Art {user ? `(${mode === 'random' ? count : 1} Credit${(mode === 'random' && count > 1) ? 's' : ''})` : ''}</>
+                        )}
+                    </button>
+
+                    {user && credits !== undefined && (
+                        <div className="text-center text-xs font-medium text-gray-400">
+                            Available Balance: <span className="text-[#E1B245]">💰 {credits} Credits</span>
+                        </div>
                     )}
-                </button>
+                </div>
             </form>
+
+            <AuthGateModal isOpen={showAuthGate} onClose={() => setShowAuthGate(false)} />
         </div>
     );
 }
